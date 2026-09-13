@@ -7,7 +7,7 @@
 
 | Linguagem | Pacote | Repositório |
 | --- | --- | --- |
-| .NET | `Twila.ParceleMais` (ainda não publicado — ver [tools/sdks/dotnet.md](sdks/dotnet.md)) | [twila-parcelemais-dotnet-sdk](https://github.com/Twila-Digital/twila-parcelemais-dotnet-sdk) |
+| .NET | `Twila.ParceleMais` (NuGet — não confundir com o pacote órfão `ParceleMais`, sem o prefixo) | [twila-parcelemais-dotnet-sdk](https://github.com/Twila-Digital/twila-parcelemais-dotnet-sdk) |
 | Java | `br.com.twila:parcelemais` (Maven Central) | [twila-parcelemais-java-sdk](https://github.com/Twila-Digital/twila-parcelemais-java-sdk) |
 | Node.js | `@twila/parcelemais` (npm) | [twila-parcelemais-node-sdk](https://github.com/Twila-Digital/twila-parcelemais-node-sdk) |
 | Python | `twila-parcelemais` (PyPI) | [twila-parcelemais-python-sdk](https://github.com/Twila-Digital/twila-parcelemais-python-sdk) |
