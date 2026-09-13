@@ -3201,7 +3201,7 @@ Sempre desenvolva e valide contra staging antes de apontar pra produção. Stagi
 
 | Linguagem | Pacote | Repositório |
 | --- | --- | --- |
-| .NET | `Twila.ParceleMais` (NuGet) | [twila-parcelemais-dotnet-sdk](https://github.com/Twila-Digital/twila-parcelemais-dotnet-sdk) |
+| .NET | `Twila.ParceleMais` (ainda não publicado — ver [tools/sdks/dotnet.md](sdks/dotnet.md)) | [twila-parcelemais-dotnet-sdk](https://github.com/Twila-Digital/twila-parcelemais-dotnet-sdk) |
 | Java | `br.com.twila:parcelemais` (Maven Central) | [twila-parcelemais-java-sdk](https://github.com/Twila-Digital/twila-parcelemais-java-sdk) |
 | Node.js | `@twila/parcelemais` (npm) | [twila-parcelemais-node-sdk](https://github.com/Twila-Digital/twila-parcelemais-node-sdk) |
 | Python | `twila-parcelemais` (PyPI) | [twila-parcelemais-python-sdk](https://github.com/Twila-Digital/twila-parcelemais-python-sdk) |
@@ -3218,7 +3218,7 @@ Todos os SDKs encapsulam: autenticação e renovação automática de token, pol
 
 Repositório: [twila-parcelemais-dotnet-sdk](https://github.com/Twila-Digital/twila-parcelemais-dotnet-sdk)
 
-> **Pacote NuGet ainda não publicado.** Enquanto isso, instale a partir do código-fonte (ver `CONTRIBUTING.md` do repositório). Assim que publicado, o pacote será `Twila.ParceleMais`.
+> **`Twila.ParceleMais` ainda não foi publicado no NuGet.org.** Existe um pacote `ParceleMais` (sem o prefixo `Twila.`) publicado sob o nome antigo, anterior à padronização — **não o use**, ele está órfão e não recebe mais atualizações. Enquanto `Twila.ParceleMais` não sai, instale a partir do código-fonte (ver `CONTRIBUTING.md` do repositório).
 
 - Compatível com .NET Core/.NET 2.0+ e .NET Framework 4.6.2+ (`netstandard2.0` + `net8.0`).
 - Autenticação, retry/circuit breaker via Polly.Core, e integração com `IServiceCollection`/`IHttpClientFactory` (`AddParceleMais(...)`).
@@ -3228,7 +3228,13 @@ Ver [rules/dotnet/](../../rules/dotnet) para regras de integração por recurso.
 
 Repositório: [twila-parcelemais-java-sdk](https://github.com/Twila-Digital/twila-parcelemais-java-sdk)
 
-> **Pacote ainda não publicado no Maven Central.** Enquanto isso, instale a partir do código-fonte (ver `CONTRIBUTING.md` do repositório). Assim que publicado, o coordinate será `br.com.twila:parcelemais`.
+```xml
+<dependency>
+    <groupId>br.com.twila</groupId>
+    <artifactId>parcelemais</artifactId>
+    <version>1.0.0</version>
+</dependency>
+```
 
 - Compatível com JDK 8 ou superior.
 - HTTP via OkHttp (o `HttpClient` nativo do JDK exigiria Java 11+, incompatível com o piso de Java 8).

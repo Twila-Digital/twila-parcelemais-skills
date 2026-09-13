@@ -183,8 +183,8 @@ curl -s -X DELETE "$PARCELEMAIS_BASE_URL/v1/webhooks/3" -H "Authorization: Beare
 
 | Language | Package | Repository |
 | --- | --- | --- |
-| .NET | `Twila.ParceleMais` (not yet published to NuGet) | [twila-parcelemais-dotnet-sdk](https://github.com/Twila-Digital/twila-parcelemais-dotnet-sdk) |
-| Java | `br.com.twila:parcelemais` (not yet published to Maven Central) | [twila-parcelemais-java-sdk](https://github.com/Twila-Digital/twila-parcelemais-java-sdk) |
+| .NET | `Twila.ParceleMais` (not yet published — see [tools/sdks/dotnet.md](tools/sdks/dotnet.md)) | [twila-parcelemais-dotnet-sdk](https://github.com/Twila-Digital/twila-parcelemais-dotnet-sdk) |
+| Java | `br.com.twila:parcelemais` | [twila-parcelemais-java-sdk](https://github.com/Twila-Digital/twila-parcelemais-java-sdk) |
 | Node.js | `@twila/parcelemais` | [twila-parcelemais-node-sdk](https://github.com/Twila-Digital/twila-parcelemais-node-sdk) |
 | Python | `twila-parcelemais` | [twila-parcelemais-python-sdk](https://github.com/Twila-Digital/twila-parcelemais-python-sdk) |
 | PHP | `twila/parcelemais` | [twila-parcelemais-php-sdk](https://github.com/Twila-Digital/twila-parcelemais-php-sdk) |
