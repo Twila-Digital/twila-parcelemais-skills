@@ -20,7 +20,7 @@ jobs:
           node-version: '22'
 
       - name: Check internal links
-        run: npx --yes markdown-link-check@3 --config .github/markdown-link-check.json $(git ls-files '*.md')
+        run: npx --yes markdown-link-check@3 --config .github/markdown-link-check.json $(git ls-files '*.md' | grep -v '^SKILL-CONSOLIDATED.md$')
 
   consolidated-up-to-date:
     runs-on: ubuntu-latest
