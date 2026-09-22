@@ -1,13 +1,13 @@
 ---
 name: parcelemais-agent
-description: Standalone skill for interacting with the Parcele+ API directly — create orders, simulate installments, list customers, manage webhooks, and more. Agent mode only, no integration code.
+description: Standalone skill for interacting with the Parcele+ API directly — create orders, simulate installments, list customers, manage establishments and webhooks, and more. Agent mode only, no integration code.
 metadata:
-  tags: parcelemais, cdc, credito, pix-parcelado, webhooks, checkout, agent, api
+  tags: parcelemais, cdc, credito, pix-parcelado, webhooks, lojas, checkout, agent, api
 ---
 
 ## When to use
 
-When the user wants to **perform actions directly** — create an order, simulate installments, list customers, check an order status, register a webhook, etc. Execute the Parcele+ API via `curl` in the terminal.
+When the user wants to **perform actions directly** — create an order, simulate installments, list customers, check an order status, register an establishment, register a webhook, etc. Execute the Parcele+ API via `curl` in the terminal.
 
 ---
 
@@ -130,6 +130,67 @@ curl -s -H "Authorization: Bearer $TOKEN" \
 
 ---
 
+#### Establishments (Lojas)
+
+An establishment (`loja`) is the merchant location that originates orders. Every establishment registered here joins the token's partner chain and is linked to that partner.
+
+**Register an establishment**
+```bash
+curl -s -X POST "$PARCELEMAIS_BASE_URL/v1/establishment" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{
+    "documento": "12345678000199",
+    "razaoSocial": "Loja Centro LTDA",
+    "nomeFantasia": "Loja Centro",
+    "modeloDesembolso": 1,
+    "responsavel": {"nome": "Maria Souza", "email": "maria@loja.com.br", "celular": "+5511999999999"},
+    "contaBancaria": {"banco": "341", "agencia": "1234", "digitoAgencia": "", "conta": "56789", "digitoConta": "0", "tipoConta": 1},
+    "endereco": {"rua": "Rua Exemplo", "numero": "100", "bairro": "Centro", "cidade": "São Paulo", "estado": "SP", "cep": "01310100"}
+  }' | jq
+```
+`modeloDesembolso`: `1` chain receives, `2` the establishment itself receives (requires the establishment's bank account), `3` third-party account (requires `nomeTitular` and `documentoTitular`). `tipoConta`: `1` Current, `2` Savings, `3` Payment. `endereco` is optional on creation.
+Response: `{"estabelecimentoId": "..."}` — save it, it's what allows editing and changing the establishment status later.
+
+**Get an establishment**
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "$PARCELEMAIS_BASE_URL/v1/establishment/ESTABLISHMENT_ID" | jq
+```
+Returns the whole establishment: `documento`, `razaoSocial`, `nomeFantasia`, `ativa`, `modeloDesembolso`, `responsavel`, `contaBancaria` and `endereco`.
+
+**List establishments**
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "$PARCELEMAIS_BASE_URL/v1/establishment/list?nomeFantasia=Centro&ativa=true" | jq
+```
+Returns the establishments in the token partner's chain. `nomeFantasia` is a partial, case-insensitive match; `ativa` filters by status. With no filters it returns every establishment, active and inactive.
+
+**Edit an establishment**
+```bash
+curl -s -X PUT "$PARCELEMAIS_BASE_URL/v1/establishment/ESTABLISHMENT_ID" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"nomeFantasia": "Loja Centro Matriz"}' | jq
+```
+`nomeFantasia` is required. `modeloDesembolso` and `endereco` are optional — omitted fields keep their current value. The **legal name (`razaoSocial`) can't be changed** through the API: it's set on creation and only changes via the BackOffice. The bank account has its own endpoint.
+
+**Replace the bank account**
+```bash
+curl -s -X PUT "$PARCELEMAIS_BASE_URL/v1/establishment/ESTABLISHMENT_ID/bank-account" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"banco": "341", "agencia": "1234", "digitoAgencia": "", "conta": "56789", "digitoConta": "0", "tipoConta": 1}' | jq
+```
+The account is replaced as a whole — send every field, not just the ones that changed. When the establishment's `modeloDesembolso` is `3`, `nomeTitular` and `documentoTitular` are still required.
+
+**Deactivate / reactivate an establishment**
+```bash
+curl -s -X PUT "$PARCELEMAIS_BASE_URL/v1/establishment/ESTABLISHMENT_ID/status" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"ativa": false}' | jq
+```
+An inactive establishment takes no new orders (in-flight orders are unaffected) and rejects edits. Send `{"ativa": true}` to reactivate.
+
+---
+
 #### Webhooks
 
 **Register a webhook**
@@ -162,12 +223,12 @@ curl -s -X DELETE "$PARCELEMAIS_BASE_URL/v1/webhooks/3" -H "Authorization: Beare
 
 ### Agent Mode Guidelines
 
-1. Always confirm before creating, updating, or deleting resources — orders and webhooks have real side effects.
+1. Always confirm before creating, updating, or deleting resources — orders, establishments and webhooks have real side effects.
 2. Default to staging for any exploration/testing; only use production when explicitly asked.
 3. Format monetary values as `R$ X,XX` when presenting results.
 4. Use `jq` to parse and format JSON responses.
 5. On errors, show `titulo`/`detalhe`/`erros` from the Problem Details body and suggest a fix.
-6. Never invent a `pedidoId`/customer ID — always obtain it via `create`/`list` before using it in another call.
+6. Never invent a `pedidoId`/customer ID/`estabelecimentoId` — always obtain it via `create`/`list` before using it in another call.
 
 ---
 

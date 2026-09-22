@@ -1,8 +1,8 @@
 ---
 name: parcelemais
-description: Integrate Parcele+ in code or interact directly with the API (create orders, simulate installments, list customers, manage webhooks, etc.)
+description: Integrate Parcele+ in code or interact directly with the API (create orders, simulate installments, list customers, manage establishments and webhooks, etc.)
 metadata:
-  tags: parcelemais, cdc, credito, pix-parcelado, webhooks, checkout, sdk
+  tags: parcelemais, cdc, credito, pix-parcelado, webhooks, lojas, checkout, sdk
 ---
 
 ## When to use
@@ -18,13 +18,14 @@ When the user wants to **perform actions directly** — create an order, simulat
 ## How to use
 
 For **direct API usage** (agent mode), see:
-- [rules/agent.md](rules/agent.md) — execute API calls directly via curl (create orders, list customers, simulate installments, manage webhooks, etc.)
+- [rules/agent.md](rules/agent.md) — execute API calls directly via curl (create orders, list customers, simulate installments, manage establishments and webhooks, etc.)
 
 For **code integration**, read the rule file for the module and language you're using:
 
 - **Orders** (create, get, list, start CDC sale, import invoice): [dotnet](rules/dotnet/orders.md) / [java](rules/java/orders.md) / [node](rules/node/orders.md) / [python](rules/python/orders.md) / [php](rules/php/orders.md) / [go](rules/go/orders.md)
 - **Simulations** (installments, values): [dotnet](rules/dotnet/simulations.md) / [java](rules/java/simulations.md) / [node](rules/node/simulations.md) / [python](rules/python/simulations.md) / [php](rules/php/simulations.md) / [go](rules/go/simulations.md)
 - **Customers** (get, list): [dotnet](rules/dotnet/customers.md) / [java](rules/java/customers.md) / [node](rules/node/customers.md) / [python](rules/python/customers.md) / [php](rules/php/customers.md) / [go](rules/go/customers.md)
+- **Establishments** (create, get, list, update, bank account, activate, deactivate): [dotnet](rules/dotnet/establishments.md) / [java](rules/java/establishments.md) / [node](rules/node/establishments.md) / [python](rules/python/establishments.md) / [php](rules/php/establishments.md) / [go](rules/go/establishments.md)
 - **Webhooks** (create, list, update, delete, signature verification): [dotnet](rules/dotnet/webhooks.md) / [java](rules/java/webhooks.md) / [node](rules/node/webhooks.md) / [python](rules/python/webhooks.md) / [php](rules/php/webhooks.md) / [go](rules/go/webhooks.md)
 - **Security** (credential handling, fraud prevention, secure defaults): [dotnet](rules/dotnet/security.md) / [java](rules/java/security.md) / [node](rules/node/security.md) / [python](rules/python/security.md) / [php](rules/php/security.md) / [go](rules/go/security.md)
 
@@ -37,9 +38,9 @@ Use development tools for enhanced integration experience:
 
 ## File Index
 
-**Rules (per language)** — [rules/dotnet/](rules/dotnet), [rules/java/](rules/java), [rules/node/](rules/node), [rules/python/](rules/python), [rules/php/](rules/php), [rules/go/](rules/go) — each with `orders.md`, `simulations.md`, `customers.md`, `webhooks.md`, `security.md`.
+**Rules (per language)** — [rules/dotnet/](rules/dotnet), [rules/java/](rules/java), [rules/node/](rules/node), [rules/python/](rules/python), [rules/php/](rules/php), [rules/go/](rules/go) — each with `orders.md`, `simulations.md`, `customers.md`, `establishments.md`, `webhooks.md`, `security.md`.
 
-**Examples (per language)** — [examples/dotnet/](examples/dotnet), [examples/java/](examples/java), [examples/node/](examples/node), [examples/python/](examples/python), [examples/php/](examples/php), [examples/go/](examples/go) — each with `orders`, `simulations`, `customers`, `webhooks` source files.
+**Examples (per language)** — [examples/dotnet/](examples/dotnet), [examples/java/](examples/java), [examples/node/](examples/node), [examples/python/](examples/python), [examples/php/](examples/php), [examples/go/](examples/go) — each with `orders`, `simulations`, `customers`, `establishments`, `webhooks` source files.
 
 **Agent Mode**
 - [rules/agent.md](rules/agent.md) — direct API usage via curl.

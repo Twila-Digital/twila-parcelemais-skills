@@ -174,6 +174,94 @@ curl -s -H "Authorization: Bearer $TOKEN" \
 
 ---
 
+### Lojas (Establishments)
+
+A loja (`loja`) é o estabelecimento que origina os pedidos. Toda loja cadastrada aqui entra na rede do parceiro do token e já fica vinculada a ele.
+
+**Cadastrar loja**
+```bash
+curl -s -X POST "$PARCELEMAIS_BASE_URL/v1/establishment" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{
+    "documento": "12345678000199",
+    "razaoSocial": "Loja Centro LTDA",
+    "nomeFantasia": "Loja Centro",
+    "modeloDesembolso": 1,
+    "responsavel": {
+      "nome": "Maria Souza",
+      "email": "maria@loja.com.br",
+      "celular": "+5511999999999"
+    },
+    "contaBancaria": {
+      "banco": "341",
+      "agencia": "1234",
+      "digitoAgencia": "",
+      "conta": "56789",
+      "digitoConta": "0",
+      "tipoConta": 1
+    },
+    "endereco": {
+      "rua": "Rua Exemplo",
+      "numero": "100",
+      "bairro": "Centro",
+      "cidade": "São Paulo",
+      "estado": "SP",
+      "cep": "01310100"
+    }
+  }' | jq
+```
+`modeloDesembolso`: `1` = a rede recebe, `2` = a própria loja recebe (exige conta bancária da loja), `3` = conta de terceiro (exige `nomeTitular` e `documentoTitular` na conta). `tipoConta`: `1` = corrente, `2` = poupança, `3` = pagamento. `endereco` é opcional no cadastro.
+Resposta: `{"estabelecimentoId": "..."}` — guarde, é o que permite editar e mudar a situação da loja depois.
+
+**Buscar loja**
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "$PARCELEMAIS_BASE_URL/v1/establishment/ESTABELECIMENTO_ID" | jq
+```
+Devolve a loja inteira: `documento`, `razaoSocial`, `nomeFantasia`, `ativa`, `modeloDesembolso`, `responsavel`, `contaBancaria` e `endereco`.
+
+**Listar lojas**
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "$PARCELEMAIS_BASE_URL/v1/establishment/list?nomeFantasia=Centro&ativa=true" | jq
+```
+Traz as lojas da rede do parceiro do token. `nomeFantasia` filtra por busca parcial, sem diferenciar maiúsculas de minúsculas; `ativa` filtra pela situação. Sem filtros, devolve todas — ativas e inativas.
+
+**Editar loja**
+```bash
+curl -s -X PUT "$PARCELEMAIS_BASE_URL/v1/establishment/ESTABELECIMENTO_ID" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{
+    "nomeFantasia": "Loja Centro Matriz"
+  }' | jq
+```
+`nomeFantasia` é obrigatório. `modeloDesembolso` e `endereco` são opcionais — quando omitidos, mantêm o valor atual. A **razão social não pode ser alterada** pela API: é definida no cadastro e só muda via BackOffice. A conta bancária tem endpoint próprio.
+
+**Trocar a conta bancária**
+```bash
+curl -s -X PUT "$PARCELEMAIS_BASE_URL/v1/establishment/ESTABELECIMENTO_ID/bank-account" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{
+    "banco": "341",
+    "agencia": "1234",
+    "digitoAgencia": "",
+    "conta": "56789",
+    "digitoConta": "0",
+    "tipoConta": 1
+  }' | jq
+```
+A conta é substituída por inteiro — mande todos os campos, não só os que mudaram. Quando o `modeloDesembolso` da loja é `3`, `nomeTitular` e `documentoTitular` continuam obrigatórios.
+
+**Inativar / reativar loja**
+```bash
+curl -s -X PUT "$PARCELEMAIS_BASE_URL/v1/establishment/ESTABELECIMENTO_ID/status" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"ativa": false}' | jq
+```
+Loja inativa não aceita novos pedidos (os em andamento seguem normalmente) e não aceita edição. Para reativar, envie `{"ativa": true}`.
+
+---
+
 ### Webhooks
 
 **Cadastrar webhook**
@@ -206,9 +294,9 @@ curl -s -X DELETE "$PARCELEMAIS_BASE_URL/v1/webhooks/3" -H "Authorization: Beare
 
 ## Diretrizes do Agent Mode
 
-1. Sempre confirme antes de criar, atualizar ou remover recursos (pedidos, webhooks) — são ações com efeito colateral real.
+1. Sempre confirme antes de criar, atualizar ou remover recursos (pedidos, lojas, webhooks) — são ações com efeito colateral real.
 2. Prefira o ambiente de staging pra qualquer teste/exploração, a menos que o usuário peça produção explicitamente.
 3. Formate valores monetários como `R$ X,XX` ao apresentar resultados ao usuário.
 4. Use `jq` pra formatar e filtrar respostas JSON.
 5. Em erro, mostre `titulo`/`detalhe`/`erros` do Problem Details e sugira a correção (ex.: campo obrigatório faltando).
-6. Nunca invente `pedidoId`/`CUSTOMER_ID` — sempre obtenha via `create`/`list` antes de usar em outra chamada.
+6. Nunca invente `pedidoId`/`CUSTOMER_ID`/`ESTABELECIMENTO_ID` — sempre obtenha via `create`/`list` antes de usar em outra chamada.

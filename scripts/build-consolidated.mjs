@@ -15,12 +15,13 @@ const LANGUAGES = [
   ["php", "PHP"],
   ["go", "Go"],
 ];
-const MODULES = ["orders", "simulations", "customers", "webhooks", "security"];
+const MODULES = ["orders", "simulations", "customers", "establishments", "webhooks", "security"];
 const EXAMPLE_EXT = { dotnet: "cs", java: "java", node: "ts", python: "py", php: "php", go: "go" };
 const MODULE_TITLES = {
   orders: "Orders",
   simulations: "Simulations",
   customers: "Customers",
+  establishments: "Establishments",
   webhooks: "Webhooks",
   security: "Security",
 };

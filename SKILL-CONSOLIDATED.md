@@ -18,13 +18,14 @@ When the user wants to **perform actions directly** — create an order, simulat
 ## How to use
 
 For **direct API usage** (agent mode), see:
-- [rules/agent.md](rules/agent.md) — execute API calls directly via curl (create orders, list customers, simulate installments, manage webhooks, etc.)
+- [rules/agent.md](rules/agent.md) — execute API calls directly via curl (create orders, list customers, simulate installments, manage establishments and webhooks, etc.)
 
 For **code integration**, read the rule file for the module and language you're using:
 
 - **Orders** (create, get, list, start CDC sale, import invoice): [dotnet](rules/dotnet/orders.md) / [java](rules/java/orders.md) / [node](rules/node/orders.md) / [python](rules/python/orders.md) / [php](rules/php/orders.md) / [go](rules/go/orders.md)
 - **Simulations** (installments, values): [dotnet](rules/dotnet/simulations.md) / [java](rules/java/simulations.md) / [node](rules/node/simulations.md) / [python](rules/python/simulations.md) / [php](rules/php/simulations.md) / [go](rules/go/simulations.md)
 - **Customers** (get, list): [dotnet](rules/dotnet/customers.md) / [java](rules/java/customers.md) / [node](rules/node/customers.md) / [python](rules/python/customers.md) / [php](rules/php/customers.md) / [go](rules/go/customers.md)
+- **Establishments** (create, get, list, update, bank account, activate, deactivate): [dotnet](rules/dotnet/establishments.md) / [java](rules/java/establishments.md) / [node](rules/node/establishments.md) / [python](rules/python/establishments.md) / [php](rules/php/establishments.md) / [go](rules/go/establishments.md)
 - **Webhooks** (create, list, update, delete, signature verification): [dotnet](rules/dotnet/webhooks.md) / [java](rules/java/webhooks.md) / [node](rules/node/webhooks.md) / [python](rules/python/webhooks.md) / [php](rules/php/webhooks.md) / [go](rules/go/webhooks.md)
 - **Security** (credential handling, fraud prevention, secure defaults): [dotnet](rules/dotnet/security.md) / [java](rules/java/security.md) / [node](rules/node/security.md) / [python](rules/python/security.md) / [php](rules/php/security.md) / [go](rules/go/security.md)
 
@@ -214,6 +215,94 @@ curl -s -H "Authorization: Bearer $TOKEN" \
 
 ---
 
+##### Lojas (Establishments)
+
+A loja (`loja`) é o estabelecimento que origina os pedidos. Toda loja cadastrada aqui entra na rede do parceiro do token e já fica vinculada a ele.
+
+**Cadastrar loja**
+```bash
+curl -s -X POST "$PARCELEMAIS_BASE_URL/v1/establishment" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{
+    "documento": "12345678000199",
+    "razaoSocial": "Loja Centro LTDA",
+    "nomeFantasia": "Loja Centro",
+    "modeloDesembolso": 1,
+    "responsavel": {
+      "nome": "Maria Souza",
+      "email": "maria@loja.com.br",
+      "celular": "+5511999999999"
+    },
+    "contaBancaria": {
+      "banco": "341",
+      "agencia": "1234",
+      "digitoAgencia": "",
+      "conta": "56789",
+      "digitoConta": "0",
+      "tipoConta": 1
+    },
+    "endereco": {
+      "rua": "Rua Exemplo",
+      "numero": "100",
+      "bairro": "Centro",
+      "cidade": "São Paulo",
+      "estado": "SP",
+      "cep": "01310100"
+    }
+  }' | jq
+```
+`modeloDesembolso`: `1` = a rede recebe, `2` = a própria loja recebe (exige conta bancária da loja), `3` = conta de terceiro (exige `nomeTitular` e `documentoTitular` na conta). `tipoConta`: `1` = corrente, `2` = poupança, `3` = pagamento. `endereco` é opcional no cadastro.
+Resposta: `{"estabelecimentoId": "..."}` — guarde, é o que permite editar e mudar a situação da loja depois.
+
+**Buscar loja**
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "$PARCELEMAIS_BASE_URL/v1/establishment/ESTABELECIMENTO_ID" | jq
+```
+Devolve a loja inteira: `documento`, `razaoSocial`, `nomeFantasia`, `ativa`, `modeloDesembolso`, `responsavel`, `contaBancaria` e `endereco`.
+
+**Listar lojas**
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "$PARCELEMAIS_BASE_URL/v1/establishment/list?nomeFantasia=Centro&ativa=true" | jq
+```
+Traz as lojas da rede do parceiro do token. `nomeFantasia` filtra por busca parcial, sem diferenciar maiúsculas de minúsculas; `ativa` filtra pela situação. Sem filtros, devolve todas — ativas e inativas.
+
+**Editar loja**
+```bash
+curl -s -X PUT "$PARCELEMAIS_BASE_URL/v1/establishment/ESTABELECIMENTO_ID" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{
+    "nomeFantasia": "Loja Centro Matriz"
+  }' | jq
+```
+`nomeFantasia` é obrigatório. `modeloDesembolso` e `endereco` são opcionais — quando omitidos, mantêm o valor atual. A **razão social não pode ser alterada** pela API: é definida no cadastro e só muda via BackOffice. A conta bancária tem endpoint próprio.
+
+**Trocar a conta bancária**
+```bash
+curl -s -X PUT "$PARCELEMAIS_BASE_URL/v1/establishment/ESTABELECIMENTO_ID/bank-account" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{
+    "banco": "341",
+    "agencia": "1234",
+    "digitoAgencia": "",
+    "conta": "56789",
+    "digitoConta": "0",
+    "tipoConta": 1
+  }' | jq
+```
+A conta é substituída por inteiro — mande todos os campos, não só os que mudaram. Quando o `modeloDesembolso` da loja é `3`, `nomeTitular` e `documentoTitular` continuam obrigatórios.
+
+**Inativar / reativar loja**
+```bash
+curl -s -X PUT "$PARCELEMAIS_BASE_URL/v1/establishment/ESTABELECIMENTO_ID/status" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"ativa": false}' | jq
+```
+Loja inativa não aceita novos pedidos (os em andamento seguem normalmente) e não aceita edição. Para reativar, envie `{"ativa": true}`.
+
+---
+
 ##### Webhooks
 
 **Cadastrar webhook**
@@ -246,18 +335,19 @@ curl -s -X DELETE "$PARCELEMAIS_BASE_URL/v1/webhooks/3" -H "Authorization: Beare
 
 #### Diretrizes do Agent Mode
 
-1. Sempre confirme antes de criar, atualizar ou remover recursos (pedidos, webhooks) — são ações com efeito colateral real.
+1. Sempre confirme antes de criar, atualizar ou remover recursos (pedidos, lojas, webhooks) — são ações com efeito colateral real.
 2. Prefira o ambiente de staging pra qualquer teste/exploração, a menos que o usuário peça produção explicitamente.
 3. Formate valores monetários como `R$ X,XX` ao apresentar resultados ao usuário.
 4. Use `jq` pra formatar e filtrar respostas JSON.
 5. Em erro, mostre `titulo`/`detalhe`/`erros` do Problem Details e sugira a correção (ex.: campo obrigatório faltando).
-6. Nunca invente `pedidoId`/`CUSTOMER_ID` — sempre obtenha via `create`/`list` antes de usar em outra chamada.
+6. Nunca invente `pedidoId`/`CUSTOMER_ID`/`ESTABELECIMENTO_ID` — sempre obtenha via `create`/`list` antes de usar em outra chamada.
 
 ---
 
 ## Rules: .NET
 
 ### Orders
+## ParceleMais Orders Integration (.NET)
 
 Orders (`Pedidos`) are credit/installment requests. `IOrdersClient` (available as `client.Orders` on `IParceleMaisClient`) exposes the full lifecycle.
 
@@ -341,6 +431,7 @@ var order = await client.Orders.GetAsync(orderId);
 - `Order.Status` uses `OrderStatus.Unknown = -1` as a forward-compatible fallback if the API introduces a new status value this SDK version doesn't know about yet — always handle the `Unknown` case rather than assuming an exhaustive switch.
 - `Order.Total`, `.CustomerName`, `.Term`, `.ApprovedAmount`, etc. are nullable — not every field is populated at every order stage (e.g. `ApprovedAmount` is only set after approval).
 ### Simulations
+## ParceleMais Simulations Integration (.NET)
 
 Simulations let you preview installments/values **without** creating an order. `ISimulationsClient` is available as `client.Simulations`.
 
@@ -398,6 +489,7 @@ foreach (var installment in installments)
 - Simulations create no server-side record — safe to call repeatedly (e.g. as the user adjusts an amount slider in a UI) without side effects or idempotency concerns.
 - `CalculationValueType.Unknown` only appears if a future API value isn't recognized by this SDK version — not expected in requests you construct yourself.
 ### Customers
+## ParceleMais Customers Integration (.NET)
 
 `ICustomersClient` (available as `client.Customers`) manages the people who request credit.
 
@@ -448,7 +540,105 @@ foreach (var customer in page.Items)
 - `ParceleMaisValidationException` — invalid document format.
 - `Address`, `Email`, `PhoneNumber` are all nullable — a customer created via an order may not have every field populated depending on what was collected.
 - `PagedResult<Customer>` — check `HasNext`/`TotalCount` before assuming a single page is the full result set.
+### Establishments
+
+An **establishment** (`loja`) is the merchant location that originates orders. Establishments created through the API are registered inside the partner's establishment chain and automatically linked to the partner authenticated by the access token.
+
+### Types
+
+```csharp
+public enum DisbursementModel
+{
+    EstablishmentChain = 1, // the chain receives the disbursement
+    Establishment = 2,      // the establishment itself receives it (requires the establishment's bank account)
+    External = 3            // a third-party account receives it (requires HolderName + HolderDocument)
+}
+
+public enum BankAccountType { Current = 1, Savings = 2, Payment = 3 }
+
+public sealed record EstablishmentOwner(string Name, string Email, string Phone); // Phone: E.164, e.g. "+5511999998888"
+
+public sealed record EstablishmentBankAccount(
+    string BankNumber,
+    string AgencyNumber,
+    string AccountNumber,
+    string AccountDigit,
+    BankAccountType AccountType,
+    string? AgencyDigit = null,
+    string? HolderName = null,      // required when DisbursementModel is External
+    string? HolderDocument = null); // required when DisbursementModel is External
+
+public sealed record EstablishmentAddress(
+    string Street, string Number, string District, string City, string State, string ZipCode,
+    string? Complement = null, string? Country = null);
+
+public sealed record CreateEstablishmentRequest(
+    string Document, // CNPJ, digits only
+    string LegalName,
+    string TradeName,
+    DisbursementModel DisbursementModel,
+    EstablishmentOwner Owner,
+    EstablishmentBankAccount BankAccount,
+    EstablishmentAddress? Address = null);
+
+public sealed record Establishment(
+    Guid EstablishmentId,
+    string Document,
+    string LegalName,
+    string TradeName,
+    bool IsActive,
+    EstablishmentOwner Owner,
+    DisbursementModel? DisbursementModel = null,
+    EstablishmentBankAccount? BankAccount = null, // null when the establishment has no bank account yet
+    EstablishmentAddress? Address = null);        // null when the establishment has no address yet
+
+public sealed record UpdateEstablishmentRequest(
+    string TradeName,
+    DisbursementModel? DisbursementModel = null, // null keeps the current one
+    EstablishmentAddress? Address = null);       // null keeps the current one
+
+public sealed record ListEstablishmentsRequest(
+    string? TradeName = null, // partial, case-insensitive match
+    bool? IsActive = null);   // null returns active and inactive
+```
+
+`client.Establishments` exposes: `CreateAsync(request, ct)`, `GetAsync(establishmentId, ct)`, `ListAsync(request, ct)`, `UpdateAsync(establishmentId, request, ct)`, `UpdateBankAccountAsync(establishmentId, bankAccount, ct)`, `ActivateAsync(establishmentId, ct)`, `DeactivateAsync(establishmentId, ct)`.
+
+### Usage
+
+```csharp
+var created = await client.Establishments.CreateAsync(new CreateEstablishmentRequest(
+    Document: "12345678000199",
+    LegalName: "Loja Centro LTDA",
+    TradeName: "Loja Centro",
+    DisbursementModel: DisbursementModel.EstablishmentChain,
+    Owner: new EstablishmentOwner("Maria Souza", "maria@loja.com.br", "+5511999998888"),
+    BankAccount: new EstablishmentBankAccount("341", "1234", "56789", "0", BankAccountType.Current)), cancellationToken);
+
+var establishment = await client.Establishments.GetAsync(created.EstablishmentId, cancellationToken);
+
+var active = await client.Establishments.ListAsync(new ListEstablishmentsRequest(TradeName: "Centro", IsActive: true), cancellationToken);
+
+await client.Establishments.UpdateAsync(created.EstablishmentId, new UpdateEstablishmentRequest("Loja Centro Matriz"), cancellationToken);
+
+await client.Establishments.UpdateBankAccountAsync(created.EstablishmentId,
+    new EstablishmentBankAccount("237", "4321", "98765", "1", BankAccountType.Savings), cancellationToken);
+
+await client.Establishments.DeactivateAsync(created.EstablishmentId, cancellationToken);
+```
+
+Keep the returned `EstablishmentId` — it's the only way to read, edit or change the status of the establishment later. The establishment's CNPJ is what `CreateOrderAsync` takes as `EstablishmentDocument`.
+
+### Error Handling and Edge Cases
+- `Document` (CNPJ) and `LegalName` must be unique across all establishments — a duplicate on `CreateAsync` throws `ParceleMaisApiException` with status `409`.
+- The legal name can't be changed through the API — `UpdateAsync` only replaces `TradeName` (always required); `DisbursementModel` and `Address` are only touched when not null.
+- The bank account has its own endpoint: `UpdateBankAccountAsync` replaces it as a whole, so send every field, not just the ones that changed.
+- An inactive establishment rejects edits — call `ActivateAsync` first. An establishment whose chain is inactive can't be created, edited or reactivated at all.
+- `DisbursementModel.Establishment` requires the establishment to already have a bank account; switching to it without one returns `400`.
+- A deactivated establishment stops accepting new orders; orders already in progress are unaffected.
+- `ListAsync` only returns establishments in the authenticated partner's chain, and `GetAsync` on any other establishment returns `404` — same for editing and deactivating.
 ### Webhooks
+## ParceleMais Webhooks Integration (.NET)
 
 Webhooks let your application react to events (order status changes) in real time. `IWebhooksClient` (as `client.Webhooks`) manages registrations; `ParceleMaisWebhookEvent` parses and verifies incoming payloads.
 
@@ -516,6 +706,7 @@ var evt = ParceleMaisWebhookEvent.Parse(rawBody, signatureHeader, storedSigningS
 - `OrderWebhookEvent.Status` uses `OrderStatus.Unknown` as a forward-compatible fallback; `StatusRaw`/`StatusName` preserve the original API values regardless.
 - Process webhook handlers idempotently — the same event can be delivered more than once.
 ### Security
+## Security Best Practices for ParceleMais Integration (.NET)
 
 This document outlines security practices for integrating with the Parcele+ API in .NET.
 
@@ -553,6 +744,7 @@ Parcele+ operates in Brazil, so integrations handling `Customer`/`Order` data sh
 ## Rules: Java
 
 ### Orders
+## ParceleMais Orders Integration (Java)
 
 Orders (`twila.parcelemais.orders`) são o núcleo do crédito direto ao consumidor (CDC) — criação, consulta, listagem paginada, início da venda CDC e anexo de nota fiscal.
 
@@ -652,6 +844,7 @@ Order order = client.orders().get(orderId);
 - `ParceleMaisTimeoutException` — attempt/total timeout exceeded, or circuit breaker open; back off, don't retry in a tight loop.
 - Reuse `ParceleMaisClient` as a singleton (`try-with-resources` only at application shutdown) — creating one per request discards the token cache and circuit breaker state.
 ### Simulations
+## ParceleMais Simulations Integration (Java)
 
 Simulations (`twila.parcelemais.simulations`) let you calculate installments or values **without creating an order** — no record is persisted.
 
@@ -719,6 +912,7 @@ for (InstallmentSimulation parcela : parcelas)
 - Values are `BigDecimal` in BRL, not cents — never multiply/divide by 100.
 - `simulateValues` requires `term` — if the user hasn't chosen one yet, call `simulateInstallments` first to list the valid terms.
 ### Customers
+## ParceleMais Customers Integration (Java)
 
 Customers (`twila.parcelemais.customers`) represent the individual (CPF) requesting credit.
 
@@ -772,7 +966,102 @@ for (Customer customer : page.getItems())
 
 - `ParceleMaisApiException` (404) when `get(customerId)` doesn't match any known customer — don't assume every CPF used in a simulation has a corresponding `Customer` record (simulations never create one).
 - `address`/`email`/`phoneNumber` can be `null` — a customer created via a minimal order payload may not have all fields populated.
+### Establishments
+
+An **establishment** (`loja`) is the merchant location that originates orders. Establishments created through the API are registered inside the partner's establishment chain and automatically linked to the partner authenticated by the access token.
+
+### Types
+
+```java
+public enum DisbursementModel {
+    ESTABLISHMENT_CHAIN, // 1 — the chain receives the disbursement
+    ESTABLISHMENT,       // 2 — the establishment itself receives it (requires the establishment's bank account)
+    EXTERNAL             // 3 — a third-party account receives it (requires holderName + holderDocument)
+}
+
+public enum BankAccountType { CURRENT, SAVINGS, PAYMENT }
+
+// All models are Lombok @Value @Builder
+EstablishmentOwner.builder().name("...").email("...").phone("+5511999998888").build(); // phone: E.164
+
+EstablishmentBankAccount.builder()
+    .bankNumber("341").agencyNumber("1234").agencyDigit("")
+    .accountNumber("56789").accountDigit("0")
+    .accountType(BankAccountType.CURRENT)
+    .holderName(null)     // required when disbursementModel is EXTERNAL
+    .holderDocument(null) // required when disbursementModel is EXTERNAL
+    .build();
+
+EstablishmentAddress.builder()
+    .street("...").number("100").complement(null).district("...")
+    .city("...").state("SP").zipCode("01310100").country(null)
+    .build();
+
+CreateEstablishmentRequest.builder()
+    .document("12345678000199") // CNPJ, digits only
+    .legalName("...").tradeName("...")
+    .disbursementModel(DisbursementModel.ESTABLISHMENT_CHAIN)
+    .owner(owner).bankAccount(bankAccount).address(address) // address is optional
+    .build();
+
+// Establishment — returned by get() and list():
+//   getEstablishmentId(), getDocument(), getLegalName(), getTradeName(), isActive(), getOwner()
+//   getDisbursementModel(), getBankAccount() and getAddress() are null while the establishment doesn't have them
+
+UpdateEstablishmentRequest.builder()
+    .tradeName("...")
+    .disbursementModel(null) // null keeps the current one
+    .address(null)           // null keeps the current one
+    .build();
+
+ListEstablishmentsRequest.builder()
+    .tradeName("Centro") // partial, case-insensitive match
+    .isActive(true)      // null returns active and inactive
+    .build();
+```
+
+`client.establishments()` exposes: `create(request)` (returns the establishment `UUID`), `get(establishmentId)`, `list(request)`, `update(establishmentId, request)`, `updateBankAccount(establishmentId, bankAccount)`, `activate(establishmentId)`, `deactivate(establishmentId)`.
+
+### Usage
+
+```java
+UUID establishmentId = client.establishments().create(CreateEstablishmentRequest.builder()
+        .document("12345678000199")
+        .legalName("Loja Centro LTDA")
+        .tradeName("Loja Centro")
+        .disbursementModel(DisbursementModel.ESTABLISHMENT_CHAIN)
+        .owner(EstablishmentOwner.builder().name("Maria Souza").email("maria@loja.com.br").phone("+5511999998888").build())
+        .bankAccount(EstablishmentBankAccount.builder()
+                .bankNumber("341").agencyNumber("1234").accountNumber("56789").accountDigit("0")
+                .accountType(BankAccountType.CURRENT).build())
+        .build());
+
+Establishment establishment = client.establishments().get(establishmentId);
+
+List<Establishment> active = client.establishments()
+        .list(ListEstablishmentsRequest.builder().tradeName("Centro").isActive(true).build());
+
+client.establishments().update(establishmentId, UpdateEstablishmentRequest.builder().tradeName("Loja Centro Matriz").build());
+
+client.establishments().updateBankAccount(establishmentId, EstablishmentBankAccount.builder()
+        .bankNumber("237").agencyNumber("4321").accountNumber("98765").accountDigit("1")
+        .accountType(BankAccountType.SAVINGS).build());
+
+client.establishments().deactivate(establishmentId);
+```
+
+Keep the returned `UUID` — it's the only way to read, edit or change the status of the establishment later. The establishment's CNPJ is what `orders().create` takes as `establishmentDocument`.
+
+### Error Handling and Edge Cases
+- `document` (CNPJ) and `legalName` must be unique across all establishments — a duplicate on `create` throws `ParceleMaisApiException` with status `409`.
+- The legal name can't be changed through the API — `update` only replaces `tradeName` (always required); `disbursementModel` and `address` are only touched when not null.
+- The bank account has its own endpoint: `updateBankAccount` replaces it as a whole, so send every field, not just the ones that changed.
+- An inactive establishment rejects edits — call `activate(establishmentId)` first. An establishment whose chain is inactive can't be created, edited or reactivated at all.
+- `DisbursementModel.ESTABLISHMENT` requires the establishment to already have a bank account; switching to it without one returns `400`.
+- A deactivated establishment stops accepting new orders; orders already in progress are unaffected.
+- `list` only returns establishments in the authenticated partner's chain, and `get` on any other establishment returns `404` — same for editing and deactivating.
 ### Webhooks
+## ParceleMais Webhooks Integration (Java)
 
 Webhooks (`twila.parcelemais.webhooks`) notify your application of asynchronous events (currently: order status changes).
 
@@ -848,6 +1137,7 @@ CreateWebhookResult result = client.webhooks().create(CreateWebhookRequest.build
 - `credential` is required when `authenticationType` is `BASIC` or `JWT` — omitting it with those types is a configuration error, not caught until the webhook actually fires.
 - Only one webhook per `WebHookType` at a time — calling `create` again for a type you already registered replaces it (confirm with `list()` before assuming you need to `create` vs. `update`).
 ### Security
+## Security Best Practices for Parcele+ Integration (Java)
 
 ### Secure Credential Storage
 
@@ -882,6 +1172,7 @@ Parcele+ handles CPF, address, and financial data — treat it accordingly:
 ## Rules: Node.js
 
 ### Orders
+## ParceleMais Orders Integration (Node.js)
 
 Orders (`pedidos`) are credit/installment requests. Creating one starts the analysis flow; once approved, a CDC sale can be started to generate a payment link.
 
@@ -988,6 +1279,7 @@ if (order.status === OrderStatus.Approved) {
 - `importInvoice` uploads can be larger — the SDK uses a longer attempt timeout for this call specifically; don't wrap it in your own shorter timeout.
 - Always check `error instanceof ParceleMaisValidationError` before reading `fieldErrors` — a generic `ParceleMaisApiError` won't have it populated the same way.
 ### Simulations
+## ParceleMais Simulations Integration (Node.js)
 
 Simulate installments or values without creating any order — useful for showing the customer terms before checkout.
 
@@ -1043,6 +1335,7 @@ for (const parcela of installments) {
 - `requestedAmount`/`amount` of zero or negative returns a `ParceleMaisValidationError` — validate on the client side first for a snappier UX.
 - `simulateInstallments` can return an empty array if no installment plan is available for that amount — handle that case in the UI instead of assuming at least one entry.
 ### Customers
+## ParceleMais Customers Integration (Node.js)
 
 Read-only access to customers (`clientes`) that have gone through an order at least once.
 
@@ -1097,7 +1390,136 @@ for (const customer of page.items) {
 ### Error Handling and Edge Cases
 - `get` with an unknown `customerId` rejects with a `ParceleMaisApiError` (404) — don't assume the customer exists just because you have an ID cached locally.
 - `list` with no filters returns every customer for your establishment, paginated — always pass `pageSize` explicitly if you expect a large base, don't rely on the default.
+### Establishments
+
+An **establishment** (`loja`) is the merchant location that originates orders. Establishments created through the API are registered inside the partner's establishment chain and automatically linked to the partner authenticated by the access token.
+
+### Types
+
+```typescript
+enum DisbursementModel {
+  EstablishmentChain = 1, // the chain receives the disbursement
+  Establishment = 2,      // the establishment itself receives it (requires the establishment's bank account)
+  External = 3,           // a third-party account receives it (requires holderName + holderDocument)
+}
+
+enum BankAccountType {
+  Current = 1,
+  Savings = 2,
+  Payment = 3,
+}
+
+interface EstablishmentOwner {
+  name: string;
+  email: string;
+  phone: string; // E.164, e.g. '+5511999998888'
+}
+
+interface EstablishmentBankAccount {
+  bankNumber: string;
+  agencyNumber: string;
+  agencyDigit?: string;
+  accountNumber: string;
+  accountDigit: string;
+  accountType: BankAccountType;
+  holderName?: string;     // required when disbursementModel is External
+  holderDocument?: string; // required when disbursementModel is External
+}
+
+interface EstablishmentAddress {
+  street: string;
+  number: string;
+  complement?: string;
+  district: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  country?: string;
+}
+
+interface CreateEstablishmentRequest {
+  document: string; // CNPJ, digits only
+  legalName: string;
+  tradeName: string;
+  disbursementModel: DisbursementModel;
+  owner: EstablishmentOwner;
+  bankAccount: EstablishmentBankAccount;
+  address?: EstablishmentAddress;
+}
+
+interface Establishment {
+  establishmentId: string;
+  document: string;
+  legalName: string;
+  tradeName: string;
+  isActive: boolean;
+  owner: EstablishmentOwner;
+  disbursementModel?: DisbursementModel;
+  bankAccount?: EstablishmentBankAccount; // absent when the establishment has no bank account yet
+  address?: EstablishmentAddress;         // absent when the establishment has no address yet
+}
+
+interface UpdateEstablishmentRequest {
+  tradeName: string;
+  disbursementModel?: DisbursementModel; // omit to keep the current one
+  address?: EstablishmentAddress;        // omit to keep the current one
+}
+
+interface ListEstablishmentsRequest {
+  tradeName?: string; // partial, case-insensitive match
+  isActive?: boolean; // omit to get active and inactive
+}
+```
+
+`client.establishments` exposes: `create(request)`, `get(establishmentId)`, `list(request)`, `update(establishmentId, request)`, `updateBankAccount(establishmentId, bankAccount)`, `activate(establishmentId)`, `deactivate(establishmentId)`.
+
+### Usage
+
+```typescript
+const { establishmentId } = await client.establishments.create({
+  document: '12345678000199',
+  legalName: 'Loja Centro LTDA',
+  tradeName: 'Loja Centro',
+  disbursementModel: DisbursementModel.EstablishmentChain,
+  owner: { name: 'Maria Souza', email: 'maria@loja.com.br', phone: '+5511999998888' },
+  bankAccount: {
+    bankNumber: '341',
+    agencyNumber: '1234',
+    accountNumber: '56789',
+    accountDigit: '0',
+    accountType: BankAccountType.Current,
+  },
+});
+
+const establishment = await client.establishments.get(establishmentId);
+
+const active = await client.establishments.list({ tradeName: 'Centro', isActive: true });
+
+await client.establishments.update(establishmentId, { tradeName: 'Loja Centro Matriz' });
+
+await client.establishments.updateBankAccount(establishmentId, {
+  bankNumber: '237',
+  agencyNumber: '4321',
+  accountNumber: '98765',
+  accountDigit: '1',
+  accountType: BankAccountType.Savings,
+});
+
+await client.establishments.deactivate(establishmentId);
+```
+
+Keep the returned `establishmentId` — it's the only way to read, edit or change the status of the establishment later. The establishment's CNPJ is what `createOrder` takes as `establishmentDocument`.
+
+### Error Handling and Edge Cases
+- `document` (CNPJ) and `legalName` must be unique across all establishments — a duplicate on `create` returns `409 Conflict`.
+- The legal name can't be changed through the API — `update` only replaces `tradeName` (always required); `disbursementModel` and `address` are only touched when present.
+- The bank account has its own endpoint: `updateBankAccount` replaces it as a whole, so send every field, not just the ones that changed.
+- An inactive establishment rejects edits — call `activate(establishmentId)` first. An establishment whose chain is inactive can't be created, edited or reactivated at all.
+- `disbursementModel: Establishment` requires the establishment to already have a bank account; switching to it without one returns `400`.
+- A deactivated establishment stops accepting new orders; orders already in progress are unaffected.
+- `list` only returns establishments in the authenticated partner's chain, and `get` on any other establishment returns `404` — same for editing and deactivating.
 ### Webhooks
+## Webhook Configuration & Security (Node.js)
 
 Webhooks let your application react to real-time events (e.g. an order changing status).
 
@@ -1168,6 +1590,7 @@ app.post('/webhooks/parcelemais', express.text({ type: '*/*' }), (req, res) => {
 - Respond `200` only after successfully processing the event; a non-2xx response causes Parcele+ to retry with backoff — make your handler idempotent using `event.orderId` + `event.status` (an old status re-delivered shouldn't redo work already done).
 - Register the webhook against a publicly reachable HTTPS URL — no `localhost` in production; use a tunnel (ngrok, etc.) for local testing against staging.
 ### Security
+## Security Best Practices for Parcele+ Integration (Node.js)
 
 This document outlines security best practices for integrating with Parcele+.
 
@@ -1203,6 +1626,7 @@ Parcele+ operates in Brazil — customer data (CPF, name, address, phone, email)
 ## Rules: Python
 
 ### Orders
+## ParceleMais Orders Integration (Python)
 
 Orders (`pedidos`) represent a CDC (Crédito Direto ao Consumidor) credit request. Access via `client.orders`.
 
@@ -1268,6 +1692,7 @@ if order.status == OrderStatus.APPROVED:
 - Treat `total`/`approved_amount`/`term`/etc. as possibly `None` until the order reaches a status where they're populated by the API.
 - A persistent network failure while calling any of these methods propagates as the underlying `httpx` exception, not a `ParceleMais*Error` — only API responses and auth failures get wrapped.
 ### Simulations
+## ParceleMais Simulations Integration (Python)
 
 Simulate installments or values without creating any real order. Access via `client.simulations`.
 
@@ -1316,6 +1741,7 @@ print(values.installment_amount)
 - Gross vs. liquid (`calculation_value_type`) changes which side (establishment vs. customer) absorbs MDR/anticipation fees — pick deliberately, don't leave the default assuming it's always correct for your use case.
 - `simulate_installments` can return an empty list for amounts outside the supported range — handle that, don't assume at least one option always comes back.
 ### Customers
+## ParceleMais Customers Integration (Python)
 
 Read-only access to customers (`clientes`) already known to Parcele+. Access via `client.customers`.
 
@@ -1354,7 +1780,134 @@ if page.has_next:
 - `get` on a non-existent `customer_id` raises `ParceleMaisApiError` with `status_code == 404` — don't assume the customer exists just because you have an id string.
 - `address`/`email`/`phone_number` may be `None` even for an existing customer — don't assume they're always populated.
 - Use `PagedResult.has_next`/`has_previous` to drive pagination — don't loop by incrementing `page` until an empty page (that wastes a request).
+### Establishments
+
+An **establishment** (`loja`) is the merchant location that originates orders. Establishments created through the API are registered inside the partner's establishment chain and automatically linked to the partner authenticated by the access token.
+
+### Types
+
+```python
+class DisbursementModel(IntEnum):
+    ESTABLISHMENT_CHAIN = 1  # the chain receives the disbursement
+    ESTABLISHMENT = 2        # the establishment itself receives it (requires the establishment's bank account)
+    EXTERNAL = 3             # a third-party account receives it (requires holder_name + holder_document)
+
+class BankAccountType(IntEnum):
+    CURRENT = 1
+    SAVINGS = 2
+    PAYMENT = 3
+
+@dataclass(frozen=True)
+class EstablishmentOwner:
+    name: str
+    email: str
+    phone: str  # E.164, e.g. "+5511999998888"
+
+@dataclass(frozen=True)
+class EstablishmentBankAccount:
+    bank_number: str
+    agency_number: str
+    account_number: str
+    account_digit: str
+    account_type: BankAccountType
+    agency_digit: Optional[str] = None
+    holder_name: Optional[str] = None      # required when disbursement_model is EXTERNAL
+    holder_document: Optional[str] = None  # required when disbursement_model is EXTERNAL
+
+@dataclass(frozen=True)
+class EstablishmentAddress:
+    street: str
+    number: str
+    district: str
+    city: str
+    state: str
+    zip_code: str
+    complement: Optional[str] = None
+    country: Optional[str] = None
+
+@dataclass(frozen=True)
+class CreateEstablishmentRequest:
+    document: str  # CNPJ, digits only
+    legal_name: str
+    trade_name: str
+    disbursement_model: DisbursementModel
+    owner: EstablishmentOwner
+    bank_account: EstablishmentBankAccount
+    address: Optional[EstablishmentAddress] = None
+
+@dataclass(frozen=True)
+class Establishment:
+    establishment_id: str
+    document: str
+    legal_name: str
+    trade_name: str
+    is_active: bool
+    owner: EstablishmentOwner
+    disbursement_model: Optional[DisbursementModel] = None
+    bank_account: Optional[EstablishmentBankAccount] = None  # None when there's no bank account yet
+    address: Optional[EstablishmentAddress] = None           # None when there's no address yet
+
+@dataclass(frozen=True)
+class UpdateEstablishmentRequest:
+    trade_name: str
+    disbursement_model: Optional[DisbursementModel] = None  # None keeps the current one
+    address: Optional[EstablishmentAddress] = None          # None keeps the current one
+
+@dataclass(frozen=True)
+class ListEstablishmentsRequest:
+    trade_name: Optional[str] = None  # partial, case-insensitive match
+    is_active: Optional[bool] = None  # None returns active and inactive
+```
+
+`client.establishments` exposes: `create(request)`, `get(establishment_id)`, `list(request)`, `update(establishment_id, request)`, `update_bank_account(establishment_id, bank_account)`, `activate(establishment_id)`, `deactivate(establishment_id)`.
+
+### Usage
+
+```python
+result = client.establishments.create(CreateEstablishmentRequest(
+    document="12345678000199",
+    legal_name="Loja Centro LTDA",
+    trade_name="Loja Centro",
+    disbursement_model=DisbursementModel.ESTABLISHMENT_CHAIN,
+    owner=EstablishmentOwner(name="Maria Souza", email="maria@loja.com.br", phone="+5511999998888"),
+    bank_account=EstablishmentBankAccount(
+        bank_number="341",
+        agency_number="1234",
+        account_number="56789",
+        account_digit="0",
+        account_type=BankAccountType.CURRENT,
+    ),
+))
+
+establishment = client.establishments.get(result.establishment_id)
+
+active = client.establishments.list(ListEstablishmentsRequest(trade_name="Centro", is_active=True))
+
+client.establishments.update(result.establishment_id, UpdateEstablishmentRequest(trade_name="Loja Centro Matriz"))
+
+client.establishments.update_bank_account(result.establishment_id, EstablishmentBankAccount(
+    bank_number="237",
+    agency_number="4321",
+    account_number="98765",
+    account_digit="1",
+    account_type=BankAccountType.SAVINGS,
+))
+
+client.establishments.deactivate(result.establishment_id)
+```
+
+Keep the returned `establishment_id` — it's the only way to read, edit or change the status of the establishment later. The establishment's CNPJ is what `create` (orders) takes as `establishment_document`.
+
+### Error Handling and Edge Cases
+- `document` (CNPJ) and `legal_name` must be unique across all establishments — a duplicate on `create` raises `ParceleMaisApiError` with status `409`.
+- The legal name can't be changed through the API — `update` only replaces `trade_name` (always required); `disbursement_model` and `address` are only touched when not `None`.
+- The bank account has its own endpoint: `update_bank_account` replaces it as a whole, so send every field, not just the ones that changed.
+- An inactive establishment rejects edits — call `activate(establishment_id)` first. An establishment whose chain is inactive can't be created, edited or reactivated at all.
+- `DisbursementModel.ESTABLISHMENT` requires the establishment to already have a bank account; switching to it without one returns `400`.
+- A deactivated establishment stops accepting new orders; orders already in progress are unaffected.
+- `list` only returns establishments in the authenticated partner's chain, and `get` on any other establishment returns `404` — same for editing and deactivating.
 ### Webhooks
+## ParceleMais Webhooks Integration (Python)
 
 Webhooks push order/customer/simulation events to your own endpoint. Access via `client.webhooks`; verify incoming events with `parse_webhook_event`.
 
@@ -1414,6 +1967,7 @@ if event.status == OrderStatus.PURCHASED:
 - `update`/`delete` take the `WebHookType` (not an id) since there's one webhook per type — get the type right, there's no separate identifier to look up.
 - Treat `OrderWebhookEvent.status` as `OrderStatus.UNKNOWN` gracefully if the API ever adds a new status value your SDK version doesn't know yet — don't crash on an unrecognized value, log and continue.
 ### Security
+## Security Best Practices for ParceleMais Integration (Python)
 
 ### Secure Credential Storage
 
@@ -1445,6 +1999,7 @@ Parcele+ operates in Brazil — customer data (CPF, name, address) flowing throu
 ## Rules: PHP
 
 ### Orders
+## ParceleMais Orders Integration (PHP)
 
 Orders (`pedidos`) represent a credit/installment request. This module lets you create an order, look it up, list orders with filters, generate the CDC payment link, and attach an invoice.
 
@@ -1524,6 +2079,7 @@ if ($order->status === OrderStatus::APPROVED) {
 - `Order::$total`, `$customerName`, `$term`, `$description`, `$approvedAmount`, `$disbursed`, `$disbursedAt`, `$requestedAmount` are all nullable — the API only fills them in at certain points in the order lifecycle (e.g. `$approvedAmount` is `null` until the order is approved).
 - `importInvoice()` uses a longer HTTP timeout internally (configurable via `ResilienceOptions`) since file uploads take longer than typical requests — don't wrap it in your own aggressive timeout.
 ### Simulations
+## ParceleMais Simulations Integration (PHP)
 
 Simulate installments or values without creating an order — no record is created on the API side.
 
@@ -1581,6 +2137,7 @@ foreach ($installments as $installment) {
 - `calculationValueType` defaults to gross (`1`) when omitted — be explicit if your business logic depends on liquid values (post MDR/anticipation fees), don't rely on the default silently.
 - These calls have no side effects — safe to call repeatedly (e.g. while a user adjusts a slider in a UI) without idempotency concerns.
 ### Customers
+## ParceleMais Customers Integration (PHP)
 
 Look up and list customers (the end consumer requesting credit) — read-only in this SDK; customers are created implicitly by `orders->create()`.
 
@@ -1630,7 +2187,113 @@ echo $page->hasNext ? "há mais páginas\n" : "última página\n";
 - `get()` throws `ParceleMaisApiException` with status 404 for an unknown `customerId` — check `getStatusCode() === 404` before treating it as an unexpected error.
 - `Customer::$address`, `$email`, `$phoneNumber` are all nullable — not every customer record has complete contact data.
 - `PagedResult` (`$page->items`, `$page->hasNext`, `$page->hasPrevious`, `$page->pageNumber`, `$page->pageSize`, `$page->totalCount`) has no auto-pagination — advance `page` yourself in a loop while `$page->hasNext` is true.
+### Establishments
+
+An **establishment** (`loja`) is the merchant location that originates orders. Establishments created through the API are registered inside the partner's establishment chain and automatically linked to the partner authenticated by the access token.
+
+### Types
+
+```php
+use Twila\ParceleMais\Establishments\BankAccountType;
+use Twila\ParceleMais\Establishments\CreateEstablishmentRequest;
+use Twila\ParceleMais\Establishments\DisbursementModel;
+use Twila\ParceleMais\Establishments\Establishment;
+use Twila\ParceleMais\Establishments\EstablishmentAddress;
+use Twila\ParceleMais\Establishments\EstablishmentBankAccount;
+use Twila\ParceleMais\Establishments\EstablishmentOwner;
+use Twila\ParceleMais\Establishments\ListEstablishmentsRequest;
+use Twila\ParceleMais\Establishments\UpdateEstablishmentRequest;
+
+// DisbursementModel::ESTABLISHMENT_CHAIN (1) — the chain receives the disbursement
+// DisbursementModel::ESTABLISHMENT (2)       — the establishment itself receives it (requires the establishment's bank account)
+// DisbursementModel::EXTERNAL (3)            — a third-party account (requires holderName + holderDocument)
+
+// BankAccountType::CURRENT (1), ::SAVINGS (2), ::PAYMENT (3)
+
+new EstablishmentOwner(string $name, string $email, string $phone); // phone: E.164, e.g. '+5511999998888'
+
+new EstablishmentBankAccount(
+    string $bankNumber,
+    string $agencyNumber,
+    string $accountNumber,
+    string $accountDigit,
+    int $accountType,
+    ?string $agencyDigit = null,
+    ?string $holderName = null,     // required when the disbursement model is EXTERNAL
+    ?string $holderDocument = null  // required when the disbursement model is EXTERNAL
+);
+
+new EstablishmentAddress(
+    string $street, string $number, string $district, string $city, string $state, string $zipCode,
+    ?string $complement = null, ?string $country = null
+);
+
+new CreateEstablishmentRequest(
+    string $document, // CNPJ, digits only
+    string $legalName,
+    string $tradeName,
+    int $disbursementModel,
+    EstablishmentOwner $owner,
+    EstablishmentBankAccount $bankAccount,
+    ?EstablishmentAddress $address = null
+);
+
+// Establishment — returned by get() and list():
+//   $establishment->establishmentId, ->document, ->legalName, ->tradeName, ->isActive, ->owner
+//   ->disbursementModel, ->bankAccount and ->address are null while the establishment doesn't have them
+
+new UpdateEstablishmentRequest(
+    string $tradeName,
+    ?int $disbursementModel = null,      // null keeps the current one
+    ?EstablishmentAddress $address = null // null keeps the current one
+);
+
+new ListEstablishmentsRequest(
+    ?string $tradeName = null, // partial, case-insensitive match
+    ?bool $isActive = null     // null returns active and inactive
+);
+```
+
+`$client->establishments` exposes: `create($request)`, `get($establishmentId)`, `list($request)`, `update($establishmentId, $request)`, `updateBankAccount($establishmentId, $bankAccount)`, `activate($establishmentId)`, `deactivate($establishmentId)`.
+
+### Usage
+
+```php
+$result = $client->establishments->create(new CreateEstablishmentRequest(
+    '12345678000199',
+    'Loja Centro LTDA',
+    'Loja Centro',
+    DisbursementModel::ESTABLISHMENT_CHAIN,
+    new EstablishmentOwner('Maria Souza', 'maria@loja.com.br', '+5511999998888'),
+    new EstablishmentBankAccount('341', '1234', '56789', '0', BankAccountType::CURRENT)
+));
+
+$establishment = $client->establishments->get($result->establishmentId);
+
+$active = $client->establishments->list(new ListEstablishmentsRequest('Centro', true));
+
+$client->establishments->update($result->establishmentId, new UpdateEstablishmentRequest('Loja Centro Matriz'));
+
+$client->establishments->updateBankAccount(
+    $result->establishmentId,
+    new EstablishmentBankAccount('237', '4321', '98765', '1', BankAccountType::SAVINGS)
+);
+
+$client->establishments->deactivate($result->establishmentId);
+```
+
+Keep the returned `establishmentId` — it's the only way to read, edit or change the status of the establishment later. The establishment's CNPJ is what the order creation takes as `establishmentDocument`.
+
+### Error Handling and Edge Cases
+- `$document` (CNPJ) and `$legalName` must be unique across all establishments — a duplicate on `create` throws `ParceleMaisApiException` with status `409`.
+- The legal name can't be changed through the API — `update` only replaces `tradeName` (always required); `disbursementModel` and `address` are only touched when not null.
+- The bank account has its own endpoint: `updateBankAccount` replaces it as a whole, so send every field, not just the ones that changed.
+- An inactive establishment rejects edits — call `activate($establishmentId)` first. An establishment whose chain is inactive can't be created, edited or reactivated at all.
+- `DisbursementModel::ESTABLISHMENT` requires the establishment to already have a bank account; switching to it without one returns `400`.
+- A deactivated establishment stops accepting new orders; orders already in progress are unaffected.
+- `list` only returns establishments in the authenticated partner's chain, and `get` on any other establishment returns `404` — same for editing and deactivating.
 ### Webhooks
+## ParceleMais Webhooks Integration (PHP)
 
 Webhooks let your application react to order status changes in real time instead of polling `orders->get()`.
 
@@ -1703,6 +2366,7 @@ Always verify the webhook signature to ensure the request really comes from Parc
 - `create()`/`update()`/`delete()` throw the same `ParceleMaisApiException` hierarchy as other modules — e.g. registering a second webhook for the same `type` typically returns a validation error (409/400 depending on the API version) since each `type` has exactly one webhook configuration.
 - Respond `200` as soon as the event is durably queued for processing — don't do slow work synchronously in the handler, or Parcele+'s retry logic may re-deliver the same event before your first response completes.
 ### Security
+## Security Best Practices for ParceleMais Integration (PHP)
 
 This document outlines security practices for integrating with Parcele+ in PHP.
 
@@ -1739,6 +2403,7 @@ Parcele+ operates in Brazil, so customer data (CPF, address, phone, email) is su
 ## Rules: Go
 
 ### Orders
+## ParceleMais Orders Integration (Go)
 
 Orders (pedidos) are how a customer requests CDC (Crédito Direto ao Consumidor) credit at the point of sale.
 
@@ -1853,6 +2518,7 @@ orderID, err := client.Orders.Create(ctx, parcelemais.CreateOrderRequest{
 - `*TimeoutError` — network timeout, total resilience-pipeline timeout, or an open circuit breaker.
 - Always check `err != nil` before using a returned pointer — a failed call returns `(nil, err)`.
 ### Simulations
+## ParceleMais Simulations Integration (Go)
 
 Simulations calculate installments/values without creating any order record — useful to show pricing before checkout.
 
@@ -1911,6 +2577,7 @@ for _, i := range installments {
 - `SimulateValues` requires a valid `Term` (installment count) — an out-of-range term returns a `*ValidationError` with field errors, not a panic.
 - These endpoints are read-only (`GET` under the hood) — safe to retry automatically; the SDK's default resilience policy already does this.
 ### Customers
+## ParceleMais Customers Integration (Go)
 
 Customers are the individuals (CPF) who request credit — created implicitly when an order is created, then queryable on their own.
 
@@ -1972,7 +2639,139 @@ for _, c := range result.Items {
 - `Get` on a non-existent `customerID` returns a `*parcelemais.APIError` with `StatusCode == 404` — check via `errors.As` rather than assuming any error means "not found".
 - Pagination follows the same shape as Orders — no auto-pagination, advance `Page` explicitly and check `result.HasNext`.
 - Optional fields (`Email`, `PhoneNumber`, `Address`) are pointers — a missing value is `nil`, not a zero-value string.
+### Establishments
+
+An **establishment** (`loja`) is the merchant location that originates orders. Establishments created through the API are registered inside the partner's establishment chain and automatically linked to the partner authenticated by the access token.
+
+### Types
+
+```go
+type DisbursementModel int
+
+const (
+    DisbursementModelEstablishmentChain DisbursementModel = 1 // the chain receives the disbursement
+    DisbursementModelEstablishment      DisbursementModel = 2 // the establishment itself receives it (requires the establishment's bank account)
+    DisbursementModelExternal           DisbursementModel = 3 // a third-party account (requires HolderName + HolderDocument)
+)
+
+type BankAccountType int
+
+const (
+    BankAccountTypeCurrent BankAccountType = 1
+    BankAccountTypeSavings BankAccountType = 2
+    BankAccountTypePayment BankAccountType = 3
+)
+
+type EstablishmentOwner struct {
+    Name  string
+    Email string
+    Phone string // E.164, e.g. "+5511999998888"
+}
+
+type EstablishmentBankAccount struct {
+    BankNumber     string
+    AgencyNumber   string
+    AgencyDigit    string
+    AccountNumber  string
+    AccountDigit   string
+    AccountType    BankAccountType
+    HolderName     string // required when the disbursement model is External
+    HolderDocument string // required when the disbursement model is External
+}
+
+type EstablishmentAddress struct {
+    Street, Number, Complement, District, City, State, ZipCode, Country string
+}
+
+type CreateEstablishmentRequest struct {
+    Document          string // CNPJ, digits only
+    LegalName         string
+    TradeName         string
+    DisbursementModel DisbursementModel
+    Owner             EstablishmentOwner
+    BankAccount       EstablishmentBankAccount
+    Address           *EstablishmentAddress // optional
+}
+
+type Establishment struct {
+    EstablishmentID   string
+    Document          string
+    LegalName         string
+    TradeName         string
+    IsActive          bool
+    Owner             EstablishmentOwner
+    DisbursementModel *DisbursementModel
+    BankAccount       *EstablishmentBankAccount // nil when there's no bank account yet
+    Address           *EstablishmentAddress     // nil when there's no address yet
+}
+
+type UpdateEstablishmentRequest struct {
+    TradeName         string
+    DisbursementModel *DisbursementModel    // nil keeps the current one
+    Address           *EstablishmentAddress // nil keeps the current one
+}
+
+type ListEstablishmentsRequest struct {
+    TradeName string // partial, case-insensitive match
+    IsActive  *bool  // nil returns active and inactive
+}
+```
+
+`client.Establishments` exposes: `Create(ctx, req)`, `Get(ctx, establishmentID)`, `List(ctx, req)`, `Update(ctx, establishmentID, req)`, `UpdateBankAccount(ctx, establishmentID, bankAccount)`, `Activate(ctx, establishmentID)`, `Deactivate(ctx, establishmentID)`.
+
+### Usage
+
+```go
+created, err := client.Establishments.Create(ctx, parcelemais.CreateEstablishmentRequest{
+    Document:          "12345678000199",
+    LegalName:         "Loja Centro LTDA",
+    TradeName:         "Loja Centro",
+    DisbursementModel: parcelemais.DisbursementModelEstablishmentChain,
+    Owner:             parcelemais.EstablishmentOwner{Name: "Maria Souza", Email: "maria@loja.com.br", Phone: "+5511999998888"},
+    BankAccount: parcelemais.EstablishmentBankAccount{
+        BankNumber:    "341",
+        AgencyNumber:  "1234",
+        AccountNumber: "56789",
+        AccountDigit:  "0",
+        AccountType:   parcelemais.BankAccountTypeCurrent,
+    },
+})
+if err != nil {
+    return err
+}
+
+establishment, err := client.Establishments.Get(ctx, created.EstablishmentID)
+
+isActive := true
+active, err := client.Establishments.List(ctx, parcelemais.ListEstablishmentsRequest{TradeName: "Centro", IsActive: &isActive})
+
+err = client.Establishments.Update(ctx, created.EstablishmentID, parcelemais.UpdateEstablishmentRequest{
+    TradeName: "Loja Centro Matriz",
+})
+
+err = client.Establishments.UpdateBankAccount(ctx, created.EstablishmentID, parcelemais.EstablishmentBankAccount{
+    BankNumber:    "237",
+    AgencyNumber:  "4321",
+    AccountNumber: "98765",
+    AccountDigit:  "1",
+    AccountType:   parcelemais.BankAccountTypeSavings,
+})
+
+err = client.Establishments.Deactivate(ctx, created.EstablishmentID)
+```
+
+Keep the returned `EstablishmentID` — it's the only way to read, edit or change the status of the establishment later. The establishment's CNPJ is what `Orders.Create` takes as `EstablishmentDocument`.
+
+### Error Handling and Edge Cases
+- `Document` (CNPJ) and `LegalName` must be unique across all establishments — a duplicate on `Create` returns a `*ParceleMaisAPIError` with status `409`.
+- The legal name can't be changed through the API — `Update` only replaces `TradeName` (always required); `DisbursementModel` and `Address` are only touched when not nil.
+- The bank account has its own endpoint: `UpdateBankAccount` replaces it as a whole, so send every field, not just the ones that changed.
+- An inactive establishment rejects edits — call `Activate` first. An establishment whose chain is inactive can't be created, edited or reactivated at all.
+- `DisbursementModelEstablishment` requires the establishment to already have a bank account; switching to it without one returns `400`.
+- A deactivated establishment stops accepting new orders; orders already in progress are unaffected.
+- `List` only returns establishments in the authenticated partner's chain, and `Get` on any other establishment returns `404` — same for editing and deactivating.
 ### Webhooks
+## ParceleMais Webhooks Integration (Go)
 
 Webhooks let your application react in real time to events (currently: order status changes).
 
@@ -2056,6 +2855,7 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 - **Malformed body**: `ParseWebhookEvent` returns `*parcelemais.WebhookSignatureError` if the body isn't valid JSON — treat it as a `401`, don't panic.
 - **Logging**: log every received event (type, order ID, status, timestamp) for observability — don't log the raw `signingSecret`.
 ### Security
+## Security Best Practices for ParceleMais Integration (Go)
 
 This document outlines security practices for integrating with the Parcele+ API in Go.
 
@@ -2191,6 +2991,79 @@ public static class CustomersExample
         var page = await client.Customers.ListAsync(new ListCustomersRequest(Document: document), ct);
         return page.Items;
     }
+}
+```
+
+### Establishments
+```dotnet
+using System.Net;
+using ParceleMais;
+using ParceleMais.Errors;
+using ParceleMais.Establishments.Models;
+
+namespace ParceleMaisExamples;
+
+public static class EstablishmentsExample
+{
+    public static async Task<Guid> CreateEstablishmentAsync(IParceleMaisClient client, CancellationToken ct = default)
+    {
+        var result = await client.Establishments.CreateAsync(new CreateEstablishmentRequest(
+            Document: "12345678000199",
+            LegalName: "Loja Centro LTDA",
+            TradeName: "Loja Centro",
+            DisbursementModel: DisbursementModel.EstablishmentChain,
+            Owner: new EstablishmentOwner("Maria Souza", "maria@loja.com.br", "+5511999998888"),
+            BankAccount: new EstablishmentBankAccount("341", "1234", "56789", "0", BankAccountType.Current),
+            Address: new EstablishmentAddress("Rua Exemplo", "100", "Centro", "São Paulo", "SP", "01310100")), ct);
+
+        // Persist EstablishmentId — it's required to read, edit or change the status of the establishment later.
+        return result.EstablishmentId;
+    }
+
+    public static async Task<Establishment?> GetEstablishmentAsync(IParceleMaisClient client, Guid establishmentId, CancellationToken ct = default)
+    {
+        try
+        {
+            return await client.Establishments.GetAsync(establishmentId, ct);
+        }
+        catch (ParceleMaisApiException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        {
+            Console.WriteLine($"Loja {establishmentId} não pertence a este parceiro.");
+            return null;
+        }
+    }
+
+    public static Task<IReadOnlyList<Establishment>> ListActiveEstablishmentsAsync(IParceleMaisClient client, string? tradeName = null, CancellationToken ct = default)
+        => client.Establishments.ListAsync(new ListEstablishmentsRequest(TradeName: tradeName, IsActive: true), ct);
+
+    public static Task RenameEstablishmentAsync(IParceleMaisClient client, Guid establishmentId, CancellationToken ct = default)
+        => client.Establishments.UpdateAsync(establishmentId, new UpdateEstablishmentRequest("Loja Centro Matriz"), ct);
+
+    public static async Task MoveDisbursementToEstablishmentAccountAsync(IParceleMaisClient client, Guid establishmentId, CancellationToken ct = default)
+    {
+        // The establishment needs its own bank account before it can receive the disbursement.
+        await client.Establishments.UpdateBankAccountAsync(establishmentId,
+            new EstablishmentBankAccount("341", "1234", "56789", "0", BankAccountType.Current), ct);
+
+        await client.Establishments.UpdateAsync(establishmentId, new UpdateEstablishmentRequest(
+            TradeName: "Loja Centro Matriz",
+            DisbursementModel: DisbursementModel.Establishment), ct);
+    }
+
+    public static async Task CloseEstablishmentAsync(IParceleMaisClient client, Guid establishmentId, CancellationToken ct = default)
+    {
+        try
+        {
+            await client.Establishments.DeactivateAsync(establishmentId, ct);
+        }
+        catch (ParceleMaisApiException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        {
+            Console.WriteLine($"Loja {establishmentId} não pertence a este parceiro.");
+        }
+    }
+
+    public static Task ReopenEstablishmentAsync(IParceleMaisClient client, Guid establishmentId, CancellationToken ct = default)
+        => client.Establishments.ActivateAsync(establishmentId, ct);
 }
 ```
 
@@ -2377,6 +3250,116 @@ public final class CustomersExample {
 }
 ```
 
+### Establishments
+```java
+import twila.parcelemais.ParceleMaisClient;
+import twila.parcelemais.errors.ParceleMaisApiException;
+import twila.parcelemais.establishments.model.BankAccountType;
+import twila.parcelemais.establishments.model.CreateEstablishmentRequest;
+import twila.parcelemais.establishments.model.DisbursementModel;
+import twila.parcelemais.establishments.model.Establishment;
+import twila.parcelemais.establishments.model.EstablishmentAddress;
+import twila.parcelemais.establishments.model.EstablishmentBankAccount;
+import twila.parcelemais.establishments.model.EstablishmentOwner;
+import twila.parcelemais.establishments.model.ListEstablishmentsRequest;
+import twila.parcelemais.establishments.model.UpdateEstablishmentRequest;
+
+import java.util.List;
+import java.util.UUID;
+
+public final class EstablishmentsExample {
+
+    public static UUID createEstablishment(ParceleMaisClient client) {
+        UUID establishmentId = client.establishments().create(CreateEstablishmentRequest.builder()
+                .document("12345678000199")
+                .legalName("Loja Centro LTDA")
+                .tradeName("Loja Centro")
+                .disbursementModel(DisbursementModel.ESTABLISHMENT_CHAIN)
+                .owner(EstablishmentOwner.builder()
+                        .name("Maria Souza")
+                        .email("maria@loja.com.br")
+                        .phone("+5511999998888")
+                        .build())
+                .bankAccount(EstablishmentBankAccount.builder()
+                        .bankNumber("341")
+                        .agencyNumber("1234")
+                        .accountNumber("56789")
+                        .accountDigit("0")
+                        .accountType(BankAccountType.CURRENT)
+                        .build())
+                .address(EstablishmentAddress.builder()
+                        .street("Rua Exemplo")
+                        .number("100")
+                        .district("Centro")
+                        .city("São Paulo")
+                        .state("SP")
+                        .zipCode("01310100")
+                        .build())
+                .build());
+
+        // Persist establishmentId — it's required to read, edit or change the status of the establishment later.
+        return establishmentId;
+    }
+
+    public static Establishment getEstablishment(ParceleMaisClient client, UUID establishmentId) {
+        try {
+            return client.establishments().get(establishmentId);
+        } catch (ParceleMaisApiException e) {
+            if (e.getStatusCode() == 404) {
+                System.out.println("Loja " + establishmentId + " não pertence a este parceiro.");
+                return null;
+            }
+            throw e;
+        }
+    }
+
+    public static List<Establishment> listActiveEstablishments(ParceleMaisClient client, String tradeName) {
+        return client.establishments().list(ListEstablishmentsRequest.builder()
+                .tradeName(tradeName)
+                .isActive(true)
+                .build());
+    }
+
+    public static void renameEstablishment(ParceleMaisClient client, UUID establishmentId) {
+        client.establishments().update(establishmentId, UpdateEstablishmentRequest.builder()
+                .tradeName("Loja Centro Matriz")
+                .build());
+    }
+
+    public static void moveDisbursementToEstablishmentAccount(ParceleMaisClient client, UUID establishmentId) {
+        // The establishment needs its own bank account before it can receive the disbursement.
+        client.establishments().updateBankAccount(establishmentId, EstablishmentBankAccount.builder()
+                .bankNumber("341")
+                .agencyNumber("1234")
+                .accountNumber("56789")
+                .accountDigit("0")
+                .accountType(BankAccountType.CURRENT)
+                .build());
+
+        client.establishments().update(establishmentId, UpdateEstablishmentRequest.builder()
+                .tradeName("Loja Centro Matriz")
+                .disbursementModel(DisbursementModel.ESTABLISHMENT)
+                .build());
+    }
+
+    public static void closeEstablishment(ParceleMaisClient client, UUID establishmentId) {
+        try {
+            client.establishments().deactivate(establishmentId);
+        } catch (ParceleMaisApiException e) {
+            if (e.getStatusCode() == 404) {
+                System.out.println("Loja " + establishmentId + " não pertence a este parceiro.");
+                return;
+            }
+            throw e;
+        }
+    }
+
+    public static void reopenEstablishment(ParceleMaisClient client, UUID establishmentId) {
+        client.establishments().activate(establishmentId);
+    }
+}
+```
+
 ### Webhooks
 ```java
 import twila.parcelemais.ParceleMaisClient;
@@ -2529,6 +3512,110 @@ export async function findCustomerByDocument(document: string) {
 
 export async function getCustomer(customerId: string) {
   return client.customers.get(customerId);
+}
+```
+
+### Establishments
+```ts
+import {
+  ParceleMaisClient,
+  ParceleMaisEnvironment,
+  BankAccountType,
+  DisbursementModel,
+  ParceleMaisApiError,
+  type Establishment,
+} from '@twila/parcelemais';
+
+const client = new ParceleMaisClient({
+  clientId: process.env.PARCELEMAIS_CLIENT_ID!,
+  clientSecret: process.env.PARCELEMAIS_CLIENT_SECRET!,
+  environment: ParceleMaisEnvironment.Staging,
+});
+
+export async function createEstablishment() {
+  const { establishmentId } = await client.establishments.create({
+    document: '12345678000199',
+    legalName: 'Loja Centro LTDA',
+    tradeName: 'Loja Centro',
+    disbursementModel: DisbursementModel.EstablishmentChain,
+    owner: {
+      name: 'Maria Souza',
+      email: 'maria@loja.com.br',
+      phone: '+5511999998888',
+    },
+    bankAccount: {
+      bankNumber: '341',
+      agencyNumber: '1234',
+      accountNumber: '56789',
+      accountDigit: '0',
+      accountType: BankAccountType.Current,
+    },
+    address: {
+      street: 'Rua Exemplo',
+      number: '100',
+      district: 'Centro',
+      city: 'São Paulo',
+      state: 'SP',
+      zipCode: '01310100',
+    },
+  });
+
+  // Persist establishmentId — it's required to read, edit or change the status of the establishment later.
+  return establishmentId;
+}
+
+export async function getEstablishment(establishmentId: string): Promise<Establishment | null> {
+  try {
+    return await client.establishments.get(establishmentId);
+  } catch (error) {
+    if (error instanceof ParceleMaisApiError && error.statusCode === 404) {
+      console.warn(`Loja ${establishmentId} não pertence a este parceiro.`);
+      return null;
+    }
+    throw error;
+  }
+}
+
+export async function listActiveEstablishments(tradeName?: string) {
+  return client.establishments.list({ tradeName, isActive: true });
+}
+
+export async function renameEstablishment(establishmentId: string) {
+  await client.establishments.update(establishmentId, {
+    tradeName: 'Loja Centro Matriz',
+  });
+}
+
+export async function moveDisbursementToEstablishmentAccount(establishmentId: string) {
+  // The establishment needs its own bank account before it can receive the disbursement.
+  await client.establishments.updateBankAccount(establishmentId, {
+    bankNumber: '341',
+    agencyNumber: '1234',
+    accountNumber: '56789',
+    accountDigit: '0',
+    accountType: BankAccountType.Current,
+  });
+
+  await client.establishments.update(establishmentId, {
+    tradeName: 'Loja Centro Matriz',
+    disbursementModel: DisbursementModel.Establishment,
+  });
+}
+
+export async function closeEstablishment(establishmentId: string) {
+  try {
+    await client.establishments.deactivate(establishmentId);
+  } catch (error) {
+    if (error instanceof ParceleMaisApiError && error.statusCode === 404) {
+      console.warn(`Loja ${establishmentId} não pertence a este parceiro.`);
+      return;
+    }
+    throw error;
+  }
+}
+
+export async function reopenEstablishment(establishmentId: string) {
+  await client.establishments.activate(establishmentId);
 }
 ```
 
@@ -2700,6 +3787,114 @@ def list_customers_by_document(client: ParceleMaisClient, document: str) -> list
     return all_customers
 ```
 
+### Establishments
+```python
+"""Establishment registration, reading, editing and deactivation — see rules/python/establishments.md."""
+
+from typing import List, Optional
+
+from twila_parcelemais import (
+    BankAccountType,
+    CreateEstablishmentRequest,
+    DisbursementModel,
+    Establishment,
+    EstablishmentAddress,
+    EstablishmentBankAccount,
+    EstablishmentOwner,
+    ListEstablishmentsRequest,
+    ParceleMaisApiError,
+    ParceleMaisClient,
+    UpdateEstablishmentRequest,
+)
+
+
+def create_establishment(client: ParceleMaisClient) -> str:
+    result = client.establishments.create(
+        CreateEstablishmentRequest(
+            document="12345678000199",
+            legal_name="Loja Centro LTDA",
+            trade_name="Loja Centro",
+            disbursement_model=DisbursementModel.ESTABLISHMENT_CHAIN,
+            owner=EstablishmentOwner(name="Maria Souza", email="maria@loja.com.br", phone="+5511999998888"),
+            bank_account=EstablishmentBankAccount(
+                bank_number="341",
+                agency_number="1234",
+                account_number="56789",
+                account_digit="0",
+                account_type=BankAccountType.CURRENT,
+            ),
+            address=EstablishmentAddress(
+                street="Rua Exemplo",
+                number="100",
+                district="Centro",
+                city="São Paulo",
+                state="SP",
+                zip_code="01310100",
+            ),
+        )
+    )
+
+    # Persist establishment_id — it's required to read, edit or change the status of the establishment later.
+    return result.establishment_id
+
+
+def get_establishment(client: ParceleMaisClient, establishment_id: str) -> Optional[Establishment]:
+    try:
+        return client.establishments.get(establishment_id)
+    except ParceleMaisApiError as error:
+        if error.status_code == 404:
+            print(f"Loja {establishment_id} não pertence a este parceiro.")
+            return None
+        raise
+
+
+def list_active_establishments(client: ParceleMaisClient, trade_name: Optional[str] = None) -> List[Establishment]:
+    return client.establishments.list(ListEstablishmentsRequest(trade_name=trade_name, is_active=True))
+
+
+def rename_establishment(client: ParceleMaisClient, establishment_id: str) -> None:
+    client.establishments.update(
+        establishment_id,
+        UpdateEstablishmentRequest(trade_name="Loja Centro Matriz"),
+    )
+
+
+def move_disbursement_to_establishment_account(client: ParceleMaisClient, establishment_id: str) -> None:
+    # The establishment needs its own bank account before it can receive the disbursement.
+    client.establishments.update_bank_account(
+        establishment_id,
+        EstablishmentBankAccount(
+            bank_number="341",
+            agency_number="1234",
+            account_number="56789",
+            account_digit="0",
+            account_type=BankAccountType.CURRENT,
+        ),
+    )
+
+    client.establishments.update(
+        establishment_id,
+        UpdateEstablishmentRequest(
+            trade_name="Loja Centro Matriz",
+            disbursement_model=DisbursementModel.ESTABLISHMENT,
+        ),
+    )
+
+
+def close_establishment(client: ParceleMaisClient, establishment_id: str) -> None:
+    try:
+        client.establishments.deactivate(establishment_id)
+    except ParceleMaisApiError as error:
+        if error.status_code == 404:
+            print(f"Loja {establishment_id} não pertence a este parceiro.")
+            return
+        raise
+
+
+def reopen_establishment(client: ParceleMaisClient, establishment_id: str) -> None:
+    client.establishments.activate(establishment_id)
+```
+
 ### Webhooks
 ```python
 """Webhook registration and signature verification — see rules/python/webhooks.md."""
@@ -2867,6 +4062,83 @@ foreach ($page->items as $item) {
     echo "{$item->id}: {$item->name}\n";
 }
 echo $page->hasNext ? "há mais páginas\n" : "última página\n";
+```
+
+### Establishments
+```php
+<?php
+
+declare(strict_types=1);
+
+use Twila\ParceleMais\Config\ClientOptions;
+use Twila\ParceleMais\Config\Environment;
+use Twila\ParceleMais\Errors\ParceleMaisApiException;
+use Twila\ParceleMais\ParceleMaisClient;
+use Twila\ParceleMais\Establishments\BankAccountType;
+use Twila\ParceleMais\Establishments\CreateEstablishmentRequest;
+use Twila\ParceleMais\Establishments\DisbursementModel;
+use Twila\ParceleMais\Establishments\EstablishmentAddress;
+use Twila\ParceleMais\Establishments\EstablishmentBankAccount;
+use Twila\ParceleMais\Establishments\EstablishmentOwner;
+use Twila\ParceleMais\Establishments\ListEstablishmentsRequest;
+use Twila\ParceleMais\Establishments\UpdateEstablishmentRequest;
+
+$client = new ParceleMaisClient(new ClientOptions(
+    getenv('PARCELEMAIS_CLIENT_ID'),
+    getenv('PARCELEMAIS_CLIENT_SECRET'),
+    Environment::STAGING
+));
+
+// Cadastrar loja
+$result = $client->establishments->create(new CreateEstablishmentRequest(
+    '12345678000199',
+    'Loja Centro LTDA',
+    'Loja Centro',
+    DisbursementModel::ESTABLISHMENT_CHAIN,
+    new EstablishmentOwner('Maria Souza', 'maria@loja.com.br', '+5511999998888'),
+    new EstablishmentBankAccount('341', '1234', '56789', '0', BankAccountType::CURRENT),
+    new EstablishmentAddress('Rua Exemplo', '100', 'Centro', 'São Paulo', 'SP', '01310100')
+));
+
+// Guarde o establishmentId — é ele que permite consultar, editar ou mudar a situação da loja depois.
+$establishmentId = $result->establishmentId;
+echo "Loja criada: {$establishmentId}\n";
+
+// Buscar a loja
+$establishment = $client->establishments->get($establishmentId);
+echo "Loja {$establishment->tradeName}: " . ($establishment->isActive ? 'ativa' : 'inativa') . "\n";
+
+// Listar as lojas ativas com "Centro" no nome fantasia
+$active = $client->establishments->list(new ListEstablishmentsRequest('Centro', true));
+echo count($active) . " loja(s) ativa(s)\n";
+
+// Editar loja (o nome fantasia é sempre obrigatório; a razão social não muda)
+$client->establishments->update($establishmentId, new UpdateEstablishmentRequest('Loja Centro Matriz'));
+
+// Passar o desembolso para a conta da própria loja — a conta precisa existir antes
+$client->establishments->updateBankAccount(
+    $establishmentId,
+    new EstablishmentBankAccount('341', '1234', '56789', '0', BankAccountType::CURRENT)
+);
+
+$client->establishments->update($establishmentId, new UpdateEstablishmentRequest(
+    'Loja Centro Matriz',
+    DisbursementModel::ESTABLISHMENT
+));
+
+// Inativar (a loja para de aceitar novos pedidos)
+try {
+    $client->establishments->deactivate($establishmentId);
+} catch (ParceleMaisApiException $e) {
+    if ($e->getStatusCode() === 404) {
+        echo "Loja {$establishmentId} não pertence a este parceiro.\n";
+    } else {
+        throw $e;
+    }
+}
+
+// Reativar
+$client->establishments->activate($establishmentId);
 ```
 
 ### Webhooks
@@ -3078,6 +4350,137 @@ func listCustomersByDocument(ctx context.Context, client *parcelemais.Client, do
 }
 ```
 
+### Establishments
+```go
+package main
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log"
+
+	parcelemais "github.com/Twila-Digital/twila-parcelemais-go-sdk"
+)
+
+func createEstablishment(ctx context.Context, client *parcelemais.Client) string {
+	created, err := client.Establishments.Create(ctx, parcelemais.CreateEstablishmentRequest{
+		Document:          "12345678000199",
+		LegalName:         "Loja Centro LTDA",
+		TradeName:         "Loja Centro",
+		DisbursementModel: parcelemais.DisbursementModelEstablishmentChain,
+		Owner: parcelemais.EstablishmentOwner{
+			Name:  "Maria Souza",
+			Email: "maria@loja.com.br",
+			Phone: "+5511999998888",
+		},
+		BankAccount: parcelemais.EstablishmentBankAccount{
+			BankNumber:    "341",
+			AgencyNumber:  "1234",
+			AccountNumber: "56789",
+			AccountDigit:  "0",
+			AccountType:   parcelemais.BankAccountTypeCurrent,
+		},
+		Address: &parcelemais.EstablishmentAddress{
+			Street:   "Rua Exemplo",
+			Number:   "100",
+			District: "Centro",
+			City:     "São Paulo",
+			State:    "SP",
+			ZipCode:  "01310100",
+		},
+	})
+	if err != nil {
+		log.Fatalf("create establishment: %v", err)
+	}
+
+	// Persist EstablishmentID — it's required to read, edit or change the status of the establishment later.
+	fmt.Println("loja criada:", created.EstablishmentID)
+	return created.EstablishmentID
+}
+
+func getEstablishment(ctx context.Context, client *parcelemais.Client, establishmentID string) *parcelemais.Establishment {
+	establishment, err := client.Establishments.Get(ctx, establishmentID)
+	if err == nil {
+		return establishment
+	}
+
+	var apiErr *parcelemais.APIError
+	if errors.As(err, &apiErr) && apiErr.StatusCode == 404 {
+		log.Printf("loja %s não pertence a este parceiro", establishmentID)
+		return nil
+	}
+
+	log.Fatalf("get establishment: %v", err)
+	return nil
+}
+
+func listActiveEstablishments(ctx context.Context, client *parcelemais.Client, tradeName string) []parcelemais.Establishment {
+	isActive := true
+
+	establishments, err := client.Establishments.List(ctx, parcelemais.ListEstablishmentsRequest{
+		TradeName: tradeName,
+		IsActive:  &isActive,
+	})
+	if err != nil {
+		log.Fatalf("list establishments: %v", err)
+	}
+
+	return establishments
+}
+
+func renameEstablishment(ctx context.Context, client *parcelemais.Client, establishmentID string) {
+	if err := client.Establishments.Update(ctx, establishmentID, parcelemais.UpdateEstablishmentRequest{
+		TradeName: "Loja Centro Matriz",
+	}); err != nil {
+		log.Fatalf("update establishment: %v", err)
+	}
+}
+
+func moveDisbursementToEstablishmentAccount(ctx context.Context, client *parcelemais.Client, establishmentID string) {
+	// The establishment needs its own bank account before it can receive the disbursement.
+	if err := client.Establishments.UpdateBankAccount(ctx, establishmentID, parcelemais.EstablishmentBankAccount{
+		BankNumber:    "341",
+		AgencyNumber:  "1234",
+		AccountNumber: "56789",
+		AccountDigit:  "0",
+		AccountType:   parcelemais.BankAccountTypeCurrent,
+	}); err != nil {
+		log.Fatalf("update establishment bank account: %v", err)
+	}
+
+	disbursementModel := parcelemais.DisbursementModelEstablishment
+
+	if err := client.Establishments.Update(ctx, establishmentID, parcelemais.UpdateEstablishmentRequest{
+		TradeName:         "Loja Centro Matriz",
+		DisbursementModel: &disbursementModel,
+	}); err != nil {
+		log.Fatalf("update establishment: %v", err)
+	}
+}
+
+func closeEstablishment(ctx context.Context, client *parcelemais.Client, establishmentID string) {
+	err := client.Establishments.Deactivate(ctx, establishmentID)
+	if err == nil {
+		return
+	}
+
+	var apiErr *parcelemais.APIError
+	if errors.As(err, &apiErr) && apiErr.StatusCode == 404 {
+		log.Printf("loja %s não pertence a este parceiro", establishmentID)
+		return
+	}
+
+	log.Fatalf("deactivate establishment: %v", err)
+}
+
+func reopenEstablishment(ctx context.Context, client *parcelemais.Client, establishmentID string) {
+	if err := client.Establishments.Activate(ctx, establishmentID); err != nil {
+		log.Fatalf("activate establishment: %v", err)
+	}
+}
+```
+
 ### Webhooks
 ```go
 package main
@@ -3135,6 +4538,7 @@ func webhookHandler(signingSecret string) http.HandlerFunc {
 
 ## Tools
 
+## Autenticação
 
 A API do Parcele+ usa OAuth2 client credentials. Toda integração precisa de um `ClientId` e `ClientSecret`, obtidos com o time comercial/técnico da Parcele+.
 
@@ -3160,6 +4564,7 @@ Staging é o ambiente padrão de desenvolvimento — não movimenta dinheiro rea
 - Use variáveis de ambiente (`PARCELEMAIS_CLIENT_ID`, `PARCELEMAIS_CLIENT_SECRET`) ou um cofre de segredos.
 - `ClientSecret` é **restrito a server-side** — nunca embarque em app mobile, SPA ou qualquer código que rode no dispositivo do usuário final.
 - Use credenciais diferentes para staging e produção.
+## Ambientes (Staging vs Produção)
 
 O Parcele+ tem dois ambientes, selecionados pela URL base (não por uma flag na credencial, diferente de outras APIs de pagamento):
 
@@ -3178,6 +4583,7 @@ Nos 6 SDKs oficiais, isso é configurado via `Environment`/`environment` (`stagi
 - **Go**: `parcelemais.EnvironmentStaging`/`EnvironmentProduction`
 
 Sempre desenvolva e valide contra staging antes de apontar pra produção. Staging usa as mesmas regras de negócio e formato de resposta — só não move dinheiro real.
+## Indo pra produção
 
 ### Checklist de segurança
 
@@ -3193,6 +4599,7 @@ Sempre desenvolva e valide contra staging antes de apontar pra produção. Stagi
 - Só a `Environment`/base URL muda (ver [environments.md](environments.md)) — regras de negócio e formato de resposta são os mesmos.
 - Em produção, pedidos aprovados geram desembolso real — trate erros de criação de pedido com mais cautela (confirme antes de tentar novamente automaticamente).
 - Credenciais (`ClientId`/`ClientSecret`) são diferentes por ambiente — nunca reutilize a de staging em produção.
+## Ecossistema Parcele+
 
 ### Documentação oficial
 - [documentacao.parcelemais.com.br](https://documentacao.parcelemais.com.br) — guia completo da API, autenticação, webhooks e SDKs. Índice completo em [`/llms.txt`](https://documentacao.parcelemais.com.br/llms.txt); qualquer página pode ser lida como Markdown puro trocando a extensão da URL para `.md`.
@@ -3215,6 +4622,7 @@ Todos os SDKs encapsulam: autenticação e renovação automática de token, pol
 [twila-parcelemais-skills](https://github.com/Twila-Digital/twila-parcelemais-skills) — pacotes de contexto especializado (este repositório) pra ensinar agentes de IA a integrar com o Parcele+ nas 6 linguagens acima, e a operar a API diretamente via `curl` (Agent Mode).
 ### SDKs
 
+### SDK .NET
 
 Repositório: [twila-parcelemais-dotnet-sdk](https://github.com/Twila-Digital/twila-parcelemais-dotnet-sdk)
 
@@ -3229,6 +4637,7 @@ dotnet add package Twila.ParceleMais
 - Namespace raiz: `ParceleMais` (`ParceleMais.Configuration`, `ParceleMais.Errors`, etc.).
 
 Ver [rules/dotnet/](../../rules/dotnet) para regras de integração por recurso.
+### SDK Java
 
 Repositório: [twila-parcelemais-java-sdk](https://github.com/Twila-Digital/twila-parcelemais-java-sdk)
 
@@ -3246,6 +4655,7 @@ Repositório: [twila-parcelemais-java-sdk](https://github.com/Twila-Digital/twil
 - Pacote raiz: `twila.parcelemais` (`twila.parcelemais.config`, etc.).
 
 Ver [rules/java/](../../rules/java) para regras de integração por recurso.
+### SDK Node.js
 
 Repositório: [twila-parcelemais-node-sdk](https://github.com/Twila-Digital/twila-parcelemais-node-sdk)
 
@@ -3257,6 +4667,7 @@ npm install @twila/parcelemais
 - Totalmente tipado (TypeScript), cliente único reaproveitável como singleton.
 
 Ver [rules/node/](../../rules/node) para regras de integração por recurso.
+### SDK Python
 
 Repositório: [twila-parcelemais-python-sdk](https://github.com/Twila-Digital/twila-parcelemais-python-sdk)
 
@@ -3269,6 +4680,7 @@ pip install twila-parcelemais
 - Módulo: `twila_parcelemais` (`ParceleMaisClient`, `ParceleMaisClientOptions`, `ParceleMaisEnvironment`).
 
 Ver [rules/python/](../../rules/python) para regras de integração por recurso.
+### SDK PHP
 
 Repositório: [twila-parcelemais-php-sdk](https://github.com/Twila-Digital/twila-parcelemais-php-sdk)
 
@@ -3281,6 +4693,7 @@ composer require twila/parcelemais
 - Namespace: `Twila\ParceleMais`.
 
 Ver [rules/php/](../../rules/php) para regras de integração por recurso.
+### SDK Go
 
 Repositório: [twila-parcelemais-go-sdk](https://github.com/Twila-Digital/twila-parcelemais-go-sdk)
 
@@ -3299,6 +4712,7 @@ Ver [rules/go/](../../rules/go) para regras de integração por recurso.
 
 ## Utils
 
+## FAQ
 
 1. **Onde encontro a documentação completa da API?**
    [documentacao.parcelemais.com.br](https://documentacao.parcelemais.com.br) — inclui autenticação, todos os endpoints e guias de webhook.
@@ -3320,6 +4734,7 @@ Ver [rules/go/](../../rules/go) para regras de integração por recurso.
 
 7. **Onde reporto um bug ou peço uma feature num SDK?**
    Abra uma issue ou PR no repositório do SDK correspondente (ver [tools/ecosystem.md](../tools/ecosystem.md)) — todos são open source e aceitam contribuição externa.
+## Glossário
 
 ### Autenticação
 - **Client ID / Client Secret**: credenciais OAuth2 client credentials, uma por ambiente (staging/produção).
