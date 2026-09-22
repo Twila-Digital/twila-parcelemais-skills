@@ -347,7 +347,6 @@ curl -s -X DELETE "$PARCELEMAIS_BASE_URL/v1/webhooks/3" -H "Authorization: Beare
 ## Rules: .NET
 
 ### Orders
-## ParceleMais Orders Integration (.NET)
 
 Orders (`Pedidos`) are credit/installment requests. `IOrdersClient` (available as `client.Orders` on `IParceleMaisClient`) exposes the full lifecycle.
 
@@ -431,7 +430,6 @@ var order = await client.Orders.GetAsync(orderId);
 - `Order.Status` uses `OrderStatus.Unknown = -1` as a forward-compatible fallback if the API introduces a new status value this SDK version doesn't know about yet — always handle the `Unknown` case rather than assuming an exhaustive switch.
 - `Order.Total`, `.CustomerName`, `.Term`, `.ApprovedAmount`, etc. are nullable — not every field is populated at every order stage (e.g. `ApprovedAmount` is only set after approval).
 ### Simulations
-## ParceleMais Simulations Integration (.NET)
 
 Simulations let you preview installments/values **without** creating an order. `ISimulationsClient` is available as `client.Simulations`.
 
@@ -489,7 +487,6 @@ foreach (var installment in installments)
 - Simulations create no server-side record — safe to call repeatedly (e.g. as the user adjusts an amount slider in a UI) without side effects or idempotency concerns.
 - `CalculationValueType.Unknown` only appears if a future API value isn't recognized by this SDK version — not expected in requests you construct yourself.
 ### Customers
-## ParceleMais Customers Integration (.NET)
 
 `ICustomersClient` (available as `client.Customers`) manages the people who request credit.
 
@@ -638,7 +635,6 @@ Keep the returned `EstablishmentId` — it's the only way to read, edit or chang
 - A deactivated establishment stops accepting new orders; orders already in progress are unaffected.
 - `ListAsync` only returns establishments in the authenticated partner's chain, and `GetAsync` on any other establishment returns `404` — same for editing and deactivating.
 ### Webhooks
-## ParceleMais Webhooks Integration (.NET)
 
 Webhooks let your application react to events (order status changes) in real time. `IWebhooksClient` (as `client.Webhooks`) manages registrations; `ParceleMaisWebhookEvent` parses and verifies incoming payloads.
 
@@ -706,7 +702,6 @@ var evt = ParceleMaisWebhookEvent.Parse(rawBody, signatureHeader, storedSigningS
 - `OrderWebhookEvent.Status` uses `OrderStatus.Unknown` as a forward-compatible fallback; `StatusRaw`/`StatusName` preserve the original API values regardless.
 - Process webhook handlers idempotently — the same event can be delivered more than once.
 ### Security
-## Security Best Practices for ParceleMais Integration (.NET)
 
 This document outlines security practices for integrating with the Parcele+ API in .NET.
 
@@ -744,7 +739,6 @@ Parcele+ operates in Brazil, so integrations handling `Customer`/`Order` data sh
 ## Rules: Java
 
 ### Orders
-## ParceleMais Orders Integration (Java)
 
 Orders (`twila.parcelemais.orders`) são o núcleo do crédito direto ao consumidor (CDC) — criação, consulta, listagem paginada, início da venda CDC e anexo de nota fiscal.
 
@@ -844,7 +838,6 @@ Order order = client.orders().get(orderId);
 - `ParceleMaisTimeoutException` — attempt/total timeout exceeded, or circuit breaker open; back off, don't retry in a tight loop.
 - Reuse `ParceleMaisClient` as a singleton (`try-with-resources` only at application shutdown) — creating one per request discards the token cache and circuit breaker state.
 ### Simulations
-## ParceleMais Simulations Integration (Java)
 
 Simulations (`twila.parcelemais.simulations`) let you calculate installments or values **without creating an order** — no record is persisted.
 
@@ -912,7 +905,6 @@ for (InstallmentSimulation parcela : parcelas)
 - Values are `BigDecimal` in BRL, not cents — never multiply/divide by 100.
 - `simulateValues` requires `term` — if the user hasn't chosen one yet, call `simulateInstallments` first to list the valid terms.
 ### Customers
-## ParceleMais Customers Integration (Java)
 
 Customers (`twila.parcelemais.customers`) represent the individual (CPF) requesting credit.
 
@@ -1061,7 +1053,6 @@ Keep the returned `UUID` — it's the only way to read, edit or change the statu
 - A deactivated establishment stops accepting new orders; orders already in progress are unaffected.
 - `list` only returns establishments in the authenticated partner's chain, and `get` on any other establishment returns `404` — same for editing and deactivating.
 ### Webhooks
-## ParceleMais Webhooks Integration (Java)
 
 Webhooks (`twila.parcelemais.webhooks`) notify your application of asynchronous events (currently: order status changes).
 
@@ -1137,7 +1128,6 @@ CreateWebhookResult result = client.webhooks().create(CreateWebhookRequest.build
 - `credential` is required when `authenticationType` is `BASIC` or `JWT` — omitting it with those types is a configuration error, not caught until the webhook actually fires.
 - Only one webhook per `WebHookType` at a time — calling `create` again for a type you already registered replaces it (confirm with `list()` before assuming you need to `create` vs. `update`).
 ### Security
-## Security Best Practices for Parcele+ Integration (Java)
 
 ### Secure Credential Storage
 
@@ -1172,7 +1162,6 @@ Parcele+ handles CPF, address, and financial data — treat it accordingly:
 ## Rules: Node.js
 
 ### Orders
-## ParceleMais Orders Integration (Node.js)
 
 Orders (`pedidos`) are credit/installment requests. Creating one starts the analysis flow; once approved, a CDC sale can be started to generate a payment link.
 
@@ -1279,7 +1268,6 @@ if (order.status === OrderStatus.Approved) {
 - `importInvoice` uploads can be larger — the SDK uses a longer attempt timeout for this call specifically; don't wrap it in your own shorter timeout.
 - Always check `error instanceof ParceleMaisValidationError` before reading `fieldErrors` — a generic `ParceleMaisApiError` won't have it populated the same way.
 ### Simulations
-## ParceleMais Simulations Integration (Node.js)
 
 Simulate installments or values without creating any order — useful for showing the customer terms before checkout.
 
@@ -1335,7 +1323,6 @@ for (const parcela of installments) {
 - `requestedAmount`/`amount` of zero or negative returns a `ParceleMaisValidationError` — validate on the client side first for a snappier UX.
 - `simulateInstallments` can return an empty array if no installment plan is available for that amount — handle that case in the UI instead of assuming at least one entry.
 ### Customers
-## ParceleMais Customers Integration (Node.js)
 
 Read-only access to customers (`clientes`) that have gone through an order at least once.
 
@@ -1519,7 +1506,6 @@ Keep the returned `establishmentId` — it's the only way to read, edit or chang
 - A deactivated establishment stops accepting new orders; orders already in progress are unaffected.
 - `list` only returns establishments in the authenticated partner's chain, and `get` on any other establishment returns `404` — same for editing and deactivating.
 ### Webhooks
-## Webhook Configuration & Security (Node.js)
 
 Webhooks let your application react to real-time events (e.g. an order changing status).
 
@@ -1590,7 +1576,6 @@ app.post('/webhooks/parcelemais', express.text({ type: '*/*' }), (req, res) => {
 - Respond `200` only after successfully processing the event; a non-2xx response causes Parcele+ to retry with backoff — make your handler idempotent using `event.orderId` + `event.status` (an old status re-delivered shouldn't redo work already done).
 - Register the webhook against a publicly reachable HTTPS URL — no `localhost` in production; use a tunnel (ngrok, etc.) for local testing against staging.
 ### Security
-## Security Best Practices for Parcele+ Integration (Node.js)
 
 This document outlines security best practices for integrating with Parcele+.
 
@@ -1626,7 +1611,6 @@ Parcele+ operates in Brazil — customer data (CPF, name, address, phone, email)
 ## Rules: Python
 
 ### Orders
-## ParceleMais Orders Integration (Python)
 
 Orders (`pedidos`) represent a CDC (Crédito Direto ao Consumidor) credit request. Access via `client.orders`.
 
@@ -1692,7 +1676,6 @@ if order.status == OrderStatus.APPROVED:
 - Treat `total`/`approved_amount`/`term`/etc. as possibly `None` until the order reaches a status where they're populated by the API.
 - A persistent network failure while calling any of these methods propagates as the underlying `httpx` exception, not a `ParceleMais*Error` — only API responses and auth failures get wrapped.
 ### Simulations
-## ParceleMais Simulations Integration (Python)
 
 Simulate installments or values without creating any real order. Access via `client.simulations`.
 
@@ -1741,7 +1724,6 @@ print(values.installment_amount)
 - Gross vs. liquid (`calculation_value_type`) changes which side (establishment vs. customer) absorbs MDR/anticipation fees — pick deliberately, don't leave the default assuming it's always correct for your use case.
 - `simulate_installments` can return an empty list for amounts outside the supported range — handle that, don't assume at least one option always comes back.
 ### Customers
-## ParceleMais Customers Integration (Python)
 
 Read-only access to customers (`clientes`) already known to Parcele+. Access via `client.customers`.
 
@@ -1907,7 +1889,6 @@ Keep the returned `establishment_id` — it's the only way to read, edit or chan
 - A deactivated establishment stops accepting new orders; orders already in progress are unaffected.
 - `list` only returns establishments in the authenticated partner's chain, and `get` on any other establishment returns `404` — same for editing and deactivating.
 ### Webhooks
-## ParceleMais Webhooks Integration (Python)
 
 Webhooks push order/customer/simulation events to your own endpoint. Access via `client.webhooks`; verify incoming events with `parse_webhook_event`.
 
@@ -1967,7 +1948,6 @@ if event.status == OrderStatus.PURCHASED:
 - `update`/`delete` take the `WebHookType` (not an id) since there's one webhook per type — get the type right, there's no separate identifier to look up.
 - Treat `OrderWebhookEvent.status` as `OrderStatus.UNKNOWN` gracefully if the API ever adds a new status value your SDK version doesn't know yet — don't crash on an unrecognized value, log and continue.
 ### Security
-## Security Best Practices for ParceleMais Integration (Python)
 
 ### Secure Credential Storage
 
@@ -1999,7 +1979,6 @@ Parcele+ operates in Brazil — customer data (CPF, name, address) flowing throu
 ## Rules: PHP
 
 ### Orders
-## ParceleMais Orders Integration (PHP)
 
 Orders (`pedidos`) represent a credit/installment request. This module lets you create an order, look it up, list orders with filters, generate the CDC payment link, and attach an invoice.
 
@@ -2079,7 +2058,6 @@ if ($order->status === OrderStatus::APPROVED) {
 - `Order::$total`, `$customerName`, `$term`, `$description`, `$approvedAmount`, `$disbursed`, `$disbursedAt`, `$requestedAmount` are all nullable — the API only fills them in at certain points in the order lifecycle (e.g. `$approvedAmount` is `null` until the order is approved).
 - `importInvoice()` uses a longer HTTP timeout internally (configurable via `ResilienceOptions`) since file uploads take longer than typical requests — don't wrap it in your own aggressive timeout.
 ### Simulations
-## ParceleMais Simulations Integration (PHP)
 
 Simulate installments or values without creating an order — no record is created on the API side.
 
@@ -2137,7 +2115,6 @@ foreach ($installments as $installment) {
 - `calculationValueType` defaults to gross (`1`) when omitted — be explicit if your business logic depends on liquid values (post MDR/anticipation fees), don't rely on the default silently.
 - These calls have no side effects — safe to call repeatedly (e.g. while a user adjusts a slider in a UI) without idempotency concerns.
 ### Customers
-## ParceleMais Customers Integration (PHP)
 
 Look up and list customers (the end consumer requesting credit) — read-only in this SDK; customers are created implicitly by `orders->create()`.
 
@@ -2293,7 +2270,6 @@ Keep the returned `establishmentId` — it's the only way to read, edit or chang
 - A deactivated establishment stops accepting new orders; orders already in progress are unaffected.
 - `list` only returns establishments in the authenticated partner's chain, and `get` on any other establishment returns `404` — same for editing and deactivating.
 ### Webhooks
-## ParceleMais Webhooks Integration (PHP)
 
 Webhooks let your application react to order status changes in real time instead of polling `orders->get()`.
 
@@ -2366,7 +2342,6 @@ Always verify the webhook signature to ensure the request really comes from Parc
 - `create()`/`update()`/`delete()` throw the same `ParceleMaisApiException` hierarchy as other modules — e.g. registering a second webhook for the same `type` typically returns a validation error (409/400 depending on the API version) since each `type` has exactly one webhook configuration.
 - Respond `200` as soon as the event is durably queued for processing — don't do slow work synchronously in the handler, or Parcele+'s retry logic may re-deliver the same event before your first response completes.
 ### Security
-## Security Best Practices for ParceleMais Integration (PHP)
 
 This document outlines security practices for integrating with Parcele+ in PHP.
 
@@ -2403,7 +2378,6 @@ Parcele+ operates in Brazil, so customer data (CPF, address, phone, email) is su
 ## Rules: Go
 
 ### Orders
-## ParceleMais Orders Integration (Go)
 
 Orders (pedidos) are how a customer requests CDC (Crédito Direto ao Consumidor) credit at the point of sale.
 
@@ -2518,7 +2492,6 @@ orderID, err := client.Orders.Create(ctx, parcelemais.CreateOrderRequest{
 - `*TimeoutError` — network timeout, total resilience-pipeline timeout, or an open circuit breaker.
 - Always check `err != nil` before using a returned pointer — a failed call returns `(nil, err)`.
 ### Simulations
-## ParceleMais Simulations Integration (Go)
 
 Simulations calculate installments/values without creating any order record — useful to show pricing before checkout.
 
@@ -2577,7 +2550,6 @@ for _, i := range installments {
 - `SimulateValues` requires a valid `Term` (installment count) — an out-of-range term returns a `*ValidationError` with field errors, not a panic.
 - These endpoints are read-only (`GET` under the hood) — safe to retry automatically; the SDK's default resilience policy already does this.
 ### Customers
-## ParceleMais Customers Integration (Go)
 
 Customers are the individuals (CPF) who request credit — created implicitly when an order is created, then queryable on their own.
 
@@ -2771,7 +2743,6 @@ Keep the returned `EstablishmentID` — it's the only way to read, edit or chang
 - A deactivated establishment stops accepting new orders; orders already in progress are unaffected.
 - `List` only returns establishments in the authenticated partner's chain, and `Get` on any other establishment returns `404` — same for editing and deactivating.
 ### Webhooks
-## ParceleMais Webhooks Integration (Go)
 
 Webhooks let your application react in real time to events (currently: order status changes).
 
@@ -2855,7 +2826,6 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 - **Malformed body**: `ParseWebhookEvent` returns `*parcelemais.WebhookSignatureError` if the body isn't valid JSON — treat it as a `401`, don't panic.
 - **Logging**: log every received event (type, order ID, status, timestamp) for observability — don't log the raw `signingSecret`.
 ### Security
-## Security Best Practices for ParceleMais Integration (Go)
 
 This document outlines security practices for integrating with the Parcele+ API in Go.
 
@@ -4538,18 +4508,18 @@ func webhookHandler(signingSecret string) http.HandlerFunc {
 
 ## Tools
 
-## Autenticação
+### Autenticação
 
 A API do Parcele+ usa OAuth2 client credentials. Toda integração precisa de um `ClientId` e `ClientSecret`, obtidos com o time comercial/técnico da Parcele+.
 
-### Fluxo
+#### Fluxo
 
 1. `POST /v1/authentication/accesstoken` com `{"clientId": "...", "clientSecret": "..."}`.
 2. A resposta traz `token_de_acesso`, `expira_em_segundos` e `tipo_de_token` (sempre `"Bearer"`).
 3. Envie `Authorization: Bearer <token_de_acesso>` em toda chamada subsequente.
 4. Quando o token expirar (ou a API responder `401`), gere um novo — os 6 SDKs oficiais fazem isso automaticamente (cache do token + renovação transparente em caso de `401`).
 
-### Ambientes
+#### Ambientes
 
 | Ambiente | Base URL |
 | --- | --- |
@@ -4558,13 +4528,13 @@ A API do Parcele+ usa OAuth2 client credentials. Toda integração precisa de um
 
 Staging é o ambiente padrão de desenvolvimento — não movimenta dinheiro real. Use produção só quando o usuário pedir explicitamente.
 
-### Boas práticas de segurança
+#### Boas práticas de segurança
 
 - **Nunca** commite `ClientSecret` em controle de versão.
 - Use variáveis de ambiente (`PARCELEMAIS_CLIENT_ID`, `PARCELEMAIS_CLIENT_SECRET`) ou um cofre de segredos.
 - `ClientSecret` é **restrito a server-side** — nunca embarque em app mobile, SPA ou qualquer código que rode no dispositivo do usuário final.
 - Use credenciais diferentes para staging e produção.
-## Ambientes (Staging vs Produção)
+### Ambientes (Staging vs Produção)
 
 O Parcele+ tem dois ambientes, selecionados pela URL base (não por uma flag na credencial, diferente de outras APIs de pagamento):
 
@@ -4583,9 +4553,9 @@ Nos 6 SDKs oficiais, isso é configurado via `Environment`/`environment` (`stagi
 - **Go**: `parcelemais.EnvironmentStaging`/`EnvironmentProduction`
 
 Sempre desenvolva e valide contra staging antes de apontar pra produção. Staging usa as mesmas regras de negócio e formato de resposta — só não move dinheiro real.
-## Indo pra produção
+### Indo pra produção
 
-### Checklist de segurança
+#### Checklist de segurança
 
 - Reutilize o client (`ParceleMaisClient`/`IParceleMaisClient`/etc.) como singleton — ele mantém cache do token e estado do circuit breaker. Não crie uma instância por requisição.
 - `ClientSecret` só em variável de ambiente/cofre — nunca em código-fonte, nunca em app cliente (mobile/SPA).
@@ -4594,17 +4564,17 @@ Sempre desenvolva e valide contra staging antes de apontar pra produção. Stagi
 - Monitore taxa de erro e latência das chamadas à API do Parcele+; alerta em taxa de erro elevada ou circuit breaker aberto.
 - Use staging pra qualquer teste exploratório — nunca teste fluxo novo direto em produção.
 
-### Diferenças staging → produção
+#### Diferenças staging → produção
 
 - Só a `Environment`/base URL muda (ver [environments.md](environments.md)) — regras de negócio e formato de resposta são os mesmos.
 - Em produção, pedidos aprovados geram desembolso real — trate erros de criação de pedido com mais cautela (confirme antes de tentar novamente automaticamente).
 - Credenciais (`ClientId`/`ClientSecret`) são diferentes por ambiente — nunca reutilize a de staging em produção.
-## Ecossistema Parcele+
+### Ecossistema Parcele+
 
-### Documentação oficial
+#### Documentação oficial
 - [documentacao.parcelemais.com.br](https://documentacao.parcelemais.com.br) — guia completo da API, autenticação, webhooks e SDKs. Índice completo em [`/llms.txt`](https://documentacao.parcelemais.com.br/llms.txt); qualquer página pode ser lida como Markdown puro trocando a extensão da URL para `.md`.
 
-### SDKs oficiais
+#### SDKs oficiais
 
 | Linguagem | Pacote | Repositório |
 | --- | --- | --- |
@@ -4617,12 +4587,12 @@ Sempre desenvolva e valide contra staging antes de apontar pra produção. Stagi
 
 Todos os SDKs encapsulam: autenticação e renovação automática de token, política de retry/circuit breaker, serialização, e uma hierarquia de erros tipados por linguagem. Todos são open source (MIT) e aceitam PR de qualquer pessoa (merge exige aprovação de alguém do time Parcele+).
 
-### Este repositório
+#### Este repositório
 
 [twila-parcelemais-skills](https://github.com/Twila-Digital/twila-parcelemais-skills) — pacotes de contexto especializado (este repositório) pra ensinar agentes de IA a integrar com o Parcele+ nas 6 linguagens acima, e a operar a API diretamente via `curl` (Agent Mode).
 ### SDKs
 
-### SDK .NET
+#### SDK .NET
 
 Repositório: [twila-parcelemais-dotnet-sdk](https://github.com/Twila-Digital/twila-parcelemais-dotnet-sdk)
 
@@ -4637,7 +4607,7 @@ dotnet add package Twila.ParceleMais
 - Namespace raiz: `ParceleMais` (`ParceleMais.Configuration`, `ParceleMais.Errors`, etc.).
 
 Ver [rules/dotnet/](../../rules/dotnet) para regras de integração por recurso.
-### SDK Java
+#### SDK Java
 
 Repositório: [twila-parcelemais-java-sdk](https://github.com/Twila-Digital/twila-parcelemais-java-sdk)
 
@@ -4655,7 +4625,7 @@ Repositório: [twila-parcelemais-java-sdk](https://github.com/Twila-Digital/twil
 - Pacote raiz: `twila.parcelemais` (`twila.parcelemais.config`, etc.).
 
 Ver [rules/java/](../../rules/java) para regras de integração por recurso.
-### SDK Node.js
+#### SDK Node.js
 
 Repositório: [twila-parcelemais-node-sdk](https://github.com/Twila-Digital/twila-parcelemais-node-sdk)
 
@@ -4667,7 +4637,7 @@ npm install @twila/parcelemais
 - Totalmente tipado (TypeScript), cliente único reaproveitável como singleton.
 
 Ver [rules/node/](../../rules/node) para regras de integração por recurso.
-### SDK Python
+#### SDK Python
 
 Repositório: [twila-parcelemais-python-sdk](https://github.com/Twila-Digital/twila-parcelemais-python-sdk)
 
@@ -4680,7 +4650,7 @@ pip install twila-parcelemais
 - Módulo: `twila_parcelemais` (`ParceleMaisClient`, `ParceleMaisClientOptions`, `ParceleMaisEnvironment`).
 
 Ver [rules/python/](../../rules/python) para regras de integração por recurso.
-### SDK PHP
+#### SDK PHP
 
 Repositório: [twila-parcelemais-php-sdk](https://github.com/Twila-Digital/twila-parcelemais-php-sdk)
 
@@ -4693,7 +4663,7 @@ composer require twila/parcelemais
 - Namespace: `Twila\ParceleMais`.
 
 Ver [rules/php/](../../rules/php) para regras de integração por recurso.
-### SDK Go
+#### SDK Go
 
 Repositório: [twila-parcelemais-go-sdk](https://github.com/Twila-Digital/twila-parcelemais-go-sdk)
 
@@ -4712,7 +4682,7 @@ Ver [rules/go/](../../rules/go) para regras de integração por recurso.
 
 ## Utils
 
-## FAQ
+### FAQ
 
 1. **Onde encontro a documentação completa da API?**
    [documentacao.parcelemais.com.br](https://documentacao.parcelemais.com.br) — inclui autenticação, todos os endpoints e guias de webhook.
@@ -4734,13 +4704,13 @@ Ver [rules/go/](../../rules/go) para regras de integração por recurso.
 
 7. **Onde reporto um bug ou peço uma feature num SDK?**
    Abra uma issue ou PR no repositório do SDK correspondente (ver [tools/ecosystem.md](../tools/ecosystem.md)) — todos são open source e aceitam contribuição externa.
-## Glossário
+### Glossário
 
-### Autenticação
+#### Autenticação
 - **Client ID / Client Secret**: credenciais OAuth2 client credentials, uma por ambiente (staging/produção).
 - **Token de acesso**: JWT de curta duração (`expira_em_segundos`) usado como `Authorization: Bearer <token>`.
 
-### Domínio de negócio
+#### Domínio de negócio
 - **CDC (Crédito Direto ao Consumidor)**: modalidade de crédito concedida diretamente ao cliente final no momento da compra.
 - **Pedido (Order)**: uma solicitação de crédito/parcelamento — tem um ciclo de vida (`status`) desde análise até desembolso.
 - **Estabelecimento**: a loja/parceiro que originou o pedido, identificado por `documentoEstabelecimento` (CNPJ).
@@ -4749,12 +4719,12 @@ Ver [rules/go/](../../rules/go) para regras de integração por recurso.
 - **Desembolso**: liberação do valor aprovado — pedido passa a `Disbursed` (status 19).
 - **Valor bruto vs. líquido** (`tipoValorCalculo`): bruto (1) é o valor antes dos descontos de MDR/antecipação; líquido (2) é o valor efetivamente recebido pelo estabelecimento.
 
-### Webhooks
+#### Webhooks
 - **Webhook**: callback HTTP enviado pelo Parcele+ quando um evento ocorre (ex.: mudança de status de pedido).
 - **Chave de assinatura**: segredo retornado ao cadastrar um webhook, usado pra validar a assinatura HMAC-SHA256 do payload recebido.
 - **Replay**: reenvio malicioso de um webhook antigo — mitigado validando o timestamp da assinatura (janela de tolerância).
 
-### Operações
+#### Operações
 - **Circuit breaker**: interrompe temporariamente chamadas à API após uma taxa de falha alta, evitando sobrecarregar um serviço já instável.
 - **Idempotência**: garantia de que repetir a mesma operação (ex.: retry automático) não duplica o efeito.
 - **Correlation ID**: identificador devolvido em erros da API, útil pra rastrear um incidente junto ao suporte do Parcele+.
