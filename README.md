@@ -38,7 +38,7 @@ A estrutura é dividida para facilitar a descoberta.
 
 </div>
 
-- **[`rules/`](rules):** regras de integração por linguagem (.NET/Java/Node/Python/PHP/Go) e por módulo (Orders, Simulations, Customers, Webhooks, Security), mais [`rules/agent.md`](rules/agent.md) para uso direto da API.
+- **[`rules/`](rules):** regras de integração por linguagem (.NET/Java/Node/Python/PHP/Go) e por módulo (Orders, Simulations, Customers, Establishments, Webhooks, Security), mais [`rules/agent.md`](rules/agent.md) para uso direto da API.
 - **[`examples/`](examples):** implementações de referência prontas para uso, por linguagem.
 - **[`tools/`](tools):** documentação técnica de autenticação, ambientes, produção e os 6 SDKs.
 - **[`utils/`](utils):** FAQ e glossário.

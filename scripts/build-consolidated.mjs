@@ -15,18 +15,27 @@ const LANGUAGES = [
   ["php", "PHP"],
   ["go", "Go"],
 ];
-const MODULES = ["orders", "simulations", "customers", "webhooks", "security"];
+const MODULES = ["orders", "simulations", "customers", "establishments", "webhooks", "security"];
 const EXAMPLE_EXT = { dotnet: "cs", java: "java", node: "ts", python: "py", php: "php", go: "go" };
 const MODULE_TITLES = {
   orders: "Orders",
   simulations: "Simulations",
   customers: "Customers",
+  establishments: "Establishments",
   webhooks: "Webhooks",
   security: "Security",
 };
 
 function read(path) {
-  return readFileSync(join(root, path), "utf8").trimEnd();
+  return readFileSync(join(root, path), "utf8").split("\r\n").join("\n").trimEnd();
+}
+
+function splitTitle(content) {
+  const match = content.match(/^# (.+)\n/);
+
+  return match
+    ? { title: match[1].trim(), body: content.slice(match[0].length) }
+    : { title: null, body: content };
 }
 
 function stripFrontmatter(content) {
@@ -86,17 +95,20 @@ for (const [dir, label] of LANGUAGES) {
 
 let tools = "---\n\n## Tools\n";
 for (const f of ["auth", "environments", "production", "ecosystem"]) {
-  tools += "\n" + demoteHeadings(read(`tools/${f}.md`).replace(/^# .+\n/, ""), 1);
+  const { title, body } = splitTitle(read(`tools/${f}.md`));
+  tools += `\n### ${title}\n` + demoteHeadings(body, 2);
 }
 tools += "\n### SDKs\n";
 for (const [dir] of LANGUAGES) {
-  tools += "\n" + demoteHeadings(read(`tools/sdks/${dir}.md`).replace(/^# .+\n/, ""), 2);
+  const { title, body } = splitTitle(read(`tools/sdks/${dir}.md`));
+  tools += `\n#### ${title}\n` + demoteHeadings(body, 3);
 }
 parts.push(tools.trim());
 
 let utils = "---\n\n## Utils\n";
 for (const f of ["faq", "glossary"]) {
-  utils += "\n" + demoteHeadings(read(`utils/${f}.md`).replace(/^# .+\n/, ""), 1);
+  const { title, body } = splitTitle(read(`utils/${f}.md`));
+  utils += `\n### ${title}\n` + demoteHeadings(body, 2);
 }
 parts.push(utils.trim());
 
