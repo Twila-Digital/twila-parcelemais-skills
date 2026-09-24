@@ -10,6 +10,8 @@ public interface WebhooksClient {
     List<Webhook> list();
     void update(WebHookType type, UpdateWebhookRequest request);
     void delete(WebHookType type);
+    PagedResult<WebhookAudit> listAudit(); // default: page 1, pageSize 10, no filters
+    PagedResult<WebhookAudit> listAudit(ListWebhookAuditRequest request);
 }
 
 @Value @Builder
@@ -31,6 +33,27 @@ public class OrderWebhookEvent {
     OrderStatus status;
     int statusRaw;
     String statusName;
+}
+
+@Value @Builder
+public class ListWebhookAuditRequest {
+    OffsetDateTime startDate;
+    OffsetDateTime endDate;
+    UUID orderId;
+    Long orderNumber;
+    Integer statusCode;
+    @Builder.Default int page = 1;
+    @Builder.Default int pageSize = 10;
+}
+
+@Value @Builder
+public class WebhookAudit {
+    UUID id;
+    WebHookType type;
+    String request;  // raw body sent to your endpoint
+    String response; // raw body your endpoint returned
+    int statusCode;
+    OffsetDateTime createdAt;
 }
 ```
 
@@ -66,6 +89,24 @@ CreateWebhookResult result = client.webhooks().create(CreateWebhookRequest.build
 
 // persist result.getSigningSecret() securely
 ```
+
+## Delivery audit
+
+`listAudit(...)` (`GET /v1/webhooks/auditoria`) returns one `WebhookAudit` per delivery attempt — including failed attempts and ones where your endpoint was unreachable — newest first. Every filter is optional: date range (`startDate`/`endDate`), `orderId`, `orderNumber`, and `statusCode` (the HTTP status your endpoint returned). Paging works like Orders/Customers: `page` defaults to 1, `pageSize` to 10, no auto-pagination — check `isHasNext()`/`getTotalCount()` on the returned `PagedResult<WebhookAudit>`.
+
+```java
+PagedResult<WebhookAudit> failures = client.webhooks().listAudit(ListWebhookAuditRequest.builder()
+        .startDate(OffsetDateTime.now().minusDays(1))
+        .statusCode(500)
+        .build());
+
+for (WebhookAudit attempt : failures.getItems()) {
+    System.out.println(attempt.getCreatedAt() + " " + attempt.getStatusCode() + ": " + attempt.getResponse());
+}
+```
+
+- Filter by `statusCode` (e.g. `500`) to find failed deliveries.
+- `request`/`response` are the raw text bodies sent to and received from your endpoint — not parsed JSON.
 
 ## Error Handling and Edge Cases
 

@@ -37,7 +37,7 @@ public sealed record CreateEstablishmentRequest(
     DisbursementModel DisbursementModel,
     EstablishmentOwner Owner,
     EstablishmentBankAccount BankAccount,
-    EstablishmentAddress? Address = null);
+    EstablishmentAddress Address);                // required on create
 
 public sealed record Establishment(
     Guid EstablishmentId,

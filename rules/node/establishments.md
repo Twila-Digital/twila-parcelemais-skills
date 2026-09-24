@@ -52,7 +52,7 @@ interface CreateEstablishmentRequest {
   disbursementModel: DisbursementModel;
   owner: EstablishmentOwner;
   bankAccount: EstablishmentBankAccount;
-  address?: EstablishmentAddress;
+  address: EstablishmentAddress;          // required on create
 }
 
 interface Establishment {

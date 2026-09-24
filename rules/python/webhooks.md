@@ -13,6 +13,8 @@ from twila_parcelemais import (
     CreateWebhookResult,
     UpdateWebhookRequest,
     OrderWebhookEvent,     # order_id, status (OrderStatus), status_raw (int), status_name (str)
+    ListWebhookAuditRequest,  # start_date/end_date (str | date | datetime), order_id (str), order_number (int), status_code (int), page=1, page_size=10 — all optional
+    WebhookAudit,          # id (str), type (WebHookType), request (str), response (str), status_code (int), created_at (str)
 )
 from twila_parcelemais import parse_webhook_event, compute_webhook_signature
 ```
@@ -21,6 +23,7 @@ from twila_parcelemais import parse_webhook_event, compute_webhook_signature
 
 - `client.webhooks.create(request: CreateWebhookRequest) -> CreateWebhookResult` — returns `signing_secret`; store it, it's shown only once.
 - `client.webhooks.list() -> list[Webhook]`
+- `client.webhooks.list_audit(request: ListWebhookAuditRequest | None = None) -> PagedResult[WebhookAudit]` — delivery audit (see below).
 - `client.webhooks.update(type: WebHookType, request: UpdateWebhookRequest) -> None`
 - `client.webhooks.delete(type: WebHookType) -> None`
 - `parse_webhook_event(raw_json, signature_header, signing_secret) -> OrderWebhookEvent` — verifies the HMAC signature (when `signature_header`/`signing_secret` are given) and decodes the event in one call.
@@ -51,6 +54,23 @@ if event.status == OrderStatus.PURCHASED:
 - The signature format is `t=<unix_timestamp>,v1=<hex_hmac_sha256>` over `"{timestamp}.{raw_body}"`; verification uses `hmac.compare_digest` (constant-time) and rejects events more than 5 minutes old (replay protection) — both happen automatically inside `parse_webhook_event`.
 - `parse_webhook_event` raises `ParceleMaisWebhookSignatureError` on a bad signature, malformed header, or expired timestamp, and on invalid/empty JSON — always wrap the call in a `try/except` and respond `401`, never `200`, on failure.
 - Respond `200` promptly after verifying and enqueuing processing — don't do slow synchronous work in the handler, or Parcele+ may consider the delivery failed and retry.
+
+## Delivery audit
+
+`list_audit` (`GET /v1/webhooks/auditoria`) returns one `WebhookAudit` per delivery attempt — including failed attempts and ones where your endpoint was unreachable — newest first. Every filter is optional: date range (`start_date`/`end_date`), `order_id`, `order_number`, and `status_code` (the HTTP status your endpoint returned). Paging works like Orders/Customers: `page` defaults to 1, `page_size` to 10, no auto-pagination — check `has_next`/`total_count` on the returned `PagedResult[WebhookAudit]`.
+
+```python
+from datetime import datetime, timedelta, timezone
+
+failures = client.webhooks.list_audit(
+    ListWebhookAuditRequest(start_date=datetime.now(timezone.utc) - timedelta(days=1), status_code=500)
+)
+for attempt in failures.items:
+    print(attempt.created_at, attempt.status_code, attempt.response)
+```
+
+- Filter by `status_code` (e.g. `500`) to find failed deliveries.
+- `request`/`response` are the raw text bodies sent to and received from your endpoint — not parsed JSON.
 
 ## Error Handling and Edge Cases
 

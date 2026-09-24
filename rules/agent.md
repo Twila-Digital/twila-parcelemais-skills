@@ -210,7 +210,7 @@ curl -s -X POST "$PARCELEMAIS_BASE_URL/v1/establishment" \
     }
   }' | jq
 ```
-`modeloDesembolso`: `1` = a rede recebe, `2` = a própria loja recebe (exige conta bancária da loja), `3` = conta de terceiro (exige `nomeTitular` e `documentoTitular` na conta). `tipoConta`: `1` = corrente, `2` = poupança, `3` = pagamento. `endereco` é opcional no cadastro.
+`modeloDesembolso`: `1` = a rede recebe, `2` = a própria loja recebe (exige conta bancária da loja), `3` = conta de terceiro (exige `nomeTitular` e `documentoTitular` na conta). `tipoConta`: `1` = corrente, `2` = poupança, `3` = pagamento. `endereco` é obrigatório no cadastro — só `complemento` e `pais` (padrão Brasil) são opcionais; sem endereço a API devolve `400`.
 Resposta: `{"estabelecimentoId": "..."}` — guarde, é o que permite editar e mudar a situação da loja depois.
 
 **Buscar loja**
@@ -289,6 +289,13 @@ curl -s -X PUT "$PARCELEMAIS_BASE_URL/v1/webhooks/3" \
 ```bash
 curl -s -X DELETE "$PARCELEMAIS_BASE_URL/v1/webhooks/3" -H "Authorization: Bearer $TOKEN" | jq
 ```
+
+**Auditoria de envios (paginado)**
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "$PARCELEMAIS_BASE_URL/v1/webhooks/auditoria?statusCode=500&pagina=1&tamanhoPagina=10" | jq
+```
+Histórico dos envios de webhook feitos ao seu endpoint, do mais recente para o mais antigo — uma linha por tentativa (`id`, `tipo`, `requisicao`, `resposta`, `statusCode`, `dataCriacao`). Filtros opcionais: `dataInicio`, `dataFim` (ISO-8601), `pedidoId`, `numeroPedido`, `statusCode` (100–599). Paginação por `pagina` (padrão 1) e `tamanhoPagina` (padrão 10, máx. 100); a resposta traz `itens` e `pagina` (`tem_proximo`, `total`...). Use `statusCode` pra achar envios que falharam — endpoint fora do ar também aparece como `500`. `dataInicio` depois de `dataFim` devolve `400`.
 
 ---
 

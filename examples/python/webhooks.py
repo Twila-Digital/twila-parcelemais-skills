@@ -1,12 +1,17 @@
-"""Webhook registration and signature verification — see rules/python/webhooks.md."""
+"""Webhook registration, signature verification and delivery audit — see rules/python/webhooks.md."""
+
+from datetime import datetime, timedelta, timezone
 
 from twila_parcelemais import (
     CreateWebhookRequest,
+    ListWebhookAuditRequest,
     OrderStatus,
+    PagedResult,
     ParceleMaisClient,
     ParceleMaisWebhookSignatureError,
     WebHookAuthenticationType,
     WebHookType,
+    WebhookAudit,
     parse_webhook_event,
 )
 
@@ -31,3 +36,12 @@ def handle_incoming_webhook(raw_body: str, signature_header: str, signing_secret
         print(f"Pedido {event.order_id} desembolsado.")
     else:
         print(f"Pedido {event.order_id}: {event.status_name}")
+
+
+def list_failed_deliveries(client: ParceleMaisClient) -> PagedResult[WebhookAudit]:
+    """Delivery audit: failed attempts (HTTP 500 from your endpoint) in the last 24h, newest first."""
+    page = client.webhooks.list_audit(
+        ListWebhookAuditRequest(start_date=datetime.now(timezone.utc) - timedelta(days=1), status_code=500)
+    )
+    # No auto-pagination — request page=2, 3, ... while page.has_next is True.
+    return page

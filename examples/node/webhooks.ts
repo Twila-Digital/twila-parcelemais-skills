@@ -6,6 +6,8 @@ import {
   WebHookAuthenticationType,
   parseWebhookEvent,
   ParceleMaisWebhookSignatureError,
+  type PagedResult,
+  type WebhookAudit,
 } from '@twila/parcelemais';
 
 const client = new ParceleMaisClient({
@@ -23,6 +25,17 @@ export async function registerOrderWebhook(url: string) {
 
   // Store result.signingSecret securely (e.g. secrets manager) — shown only once.
   return result.signingSecret;
+}
+
+// Delivery audit: failed attempts (HTTP 500 from your endpoint) in the last 24h, newest first.
+export async function listFailedDeliveries(): Promise<PagedResult<WebhookAudit>> {
+  const page = await client.webhooks.listAudit({
+    startDate: new Date(Date.now() - 24 * 60 * 60 * 1000),
+    statusCode: 500,
+  });
+
+  // No auto-pagination — request page: 2, 3, ... while page.hasNext is true.
+  return page;
 }
 
 const app = express();

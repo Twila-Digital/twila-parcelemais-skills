@@ -33,7 +33,7 @@ CreateEstablishmentRequest.builder()
     .document("12345678000199") // CNPJ, digits only
     .legalName("...").tradeName("...")
     .disbursementModel(DisbursementModel.ESTABLISHMENT_CHAIN)
-    .owner(owner).bankAccount(bankAccount).address(address) // address is optional
+    .owner(owner).bankAccount(bankAccount).address(address) // required (@NonNull — build() throws NullPointerException without it)
     .build();
 
 // Establishment — returned by get() and list():
