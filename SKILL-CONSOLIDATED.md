@@ -26,7 +26,7 @@ For **code integration**, read the rule file for the module and language you're 
 - **Simulations** (installments, values): [dotnet](rules/dotnet/simulations.md) / [java](rules/java/simulations.md) / [node](rules/node/simulations.md) / [python](rules/python/simulations.md) / [php](rules/php/simulations.md) / [go](rules/go/simulations.md)
 - **Customers** (get, list): [dotnet](rules/dotnet/customers.md) / [java](rules/java/customers.md) / [node](rules/node/customers.md) / [python](rules/python/customers.md) / [php](rules/php/customers.md) / [go](rules/go/customers.md)
 - **Establishments** (create, get, list, update, bank account, activate, deactivate): [dotnet](rules/dotnet/establishments.md) / [java](rules/java/establishments.md) / [node](rules/node/establishments.md) / [python](rules/python/establishments.md) / [php](rules/php/establishments.md) / [go](rules/go/establishments.md)
-- **Webhooks** (create, list, update, delete, signature verification): [dotnet](rules/dotnet/webhooks.md) / [java](rules/java/webhooks.md) / [node](rules/node/webhooks.md) / [python](rules/python/webhooks.md) / [php](rules/php/webhooks.md) / [go](rules/go/webhooks.md)
+- **Webhooks** (create, list, update, delete, signature verification, delivery audit): [dotnet](rules/dotnet/webhooks.md) / [java](rules/java/webhooks.md) / [node](rules/node/webhooks.md) / [python](rules/python/webhooks.md) / [php](rules/php/webhooks.md) / [go](rules/go/webhooks.md)
 - **Security** (credential handling, fraud prevention, secure defaults): [dotnet](rules/dotnet/security.md) / [java](rules/java/security.md) / [node](rules/node/security.md) / [python](rules/python/security.md) / [php](rules/php/security.md) / [go](rules/go/security.md)
 
 Use development tools for enhanced integration experience:
@@ -251,7 +251,7 @@ curl -s -X POST "$PARCELEMAIS_BASE_URL/v1/establishment" \
     }
   }' | jq
 ```
-`modeloDesembolso`: `1` = a rede recebe, `2` = a própria loja recebe (exige conta bancária da loja), `3` = conta de terceiro (exige `nomeTitular` e `documentoTitular` na conta). `tipoConta`: `1` = corrente, `2` = poupança, `3` = pagamento. `endereco` é opcional no cadastro.
+`modeloDesembolso`: `1` = a rede recebe, `2` = a própria loja recebe (exige conta bancária da loja), `3` = conta de terceiro (exige `nomeTitular` e `documentoTitular` na conta). `tipoConta`: `1` = corrente, `2` = poupança, `3` = pagamento. `endereco` é obrigatório no cadastro — só `complemento` e `pais` (padrão Brasil) são opcionais; sem endereço a API devolve `400`.
 Resposta: `{"estabelecimentoId": "..."}` — guarde, é o que permite editar e mudar a situação da loja depois.
 
 **Buscar loja**
@@ -330,6 +330,13 @@ curl -s -X PUT "$PARCELEMAIS_BASE_URL/v1/webhooks/3" \
 ```bash
 curl -s -X DELETE "$PARCELEMAIS_BASE_URL/v1/webhooks/3" -H "Authorization: Bearer $TOKEN" | jq
 ```
+
+**Auditoria de envios (paginado)**
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "$PARCELEMAIS_BASE_URL/v1/webhooks/auditoria?statusCode=500&pagina=1&tamanhoPagina=10" | jq
+```
+Histórico dos envios de webhook feitos ao seu endpoint, do mais recente para o mais antigo — uma linha por tentativa (`id`, `tipo`, `requisicao`, `resposta`, `statusCode`, `dataCriacao`). Filtros opcionais: `dataInicio`, `dataFim` (ISO-8601), `pedidoId`, `numeroPedido`, `statusCode` (100–599). Paginação por `pagina` (padrão 1) e `tamanhoPagina` (padrão 10, máx. 100); a resposta traz `itens` e `pagina` (`tem_proximo`, `total`...). Use `statusCode` pra achar envios que falharam — endpoint fora do ar também aparece como `500`. `dataInicio` depois de `dataFim` devolve `400`.
 
 ---
 
@@ -576,7 +583,7 @@ public sealed record CreateEstablishmentRequest(
     DisbursementModel DisbursementModel,
     EstablishmentOwner Owner,
     EstablishmentBankAccount BankAccount,
-    EstablishmentAddress? Address = null);
+    EstablishmentAddress Address);                // required on create
 
 public sealed record Establishment(
     Guid EstablishmentId,
@@ -649,6 +656,8 @@ public sealed record CreateWebhookRequest(WebHookType Type, string Url, WebHookA
 public sealed record CreateWebhookResult(string SigningSecret);
 public sealed record UpdateWebhookRequest(string Url, WebHookAuthenticationType AuthenticationType, string? Credential = null);
 public sealed record OrderWebhookEvent(Guid OrderId, OrderStatus Status, int StatusRaw, string StatusName);
+public sealed record ListWebhookAuditRequest(DateTimeOffset? StartDate = null, DateTimeOffset? EndDate = null, Guid? OrderId = null, long? OrderNumber = null, int? StatusCode = null, int Page = 1, int PageSize = 10);
+public sealed record WebhookAudit(Guid Id, WebHookType Type, string Request, string Response, int StatusCode, DateTimeOffset CreatedAt);
 ```
 
 ### Interface
@@ -658,6 +667,7 @@ public interface IWebhooksClient
 {
     Task<CreateWebhookResult> CreateAsync(CreateWebhookRequest request, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Webhook>> ListAsync(CancellationToken cancellationToken = default);
+    Task<PagedResult<WebhookAudit>> ListAuditAsync(ListWebhookAuditRequest? request = null, CancellationToken cancellationToken = default);
     Task UpdateAsync(WebHookType type, UpdateWebhookRequest request, CancellationToken cancellationToken = default);
     Task DeleteAsync(WebHookType type, CancellationToken cancellationToken = default);
 }
@@ -694,6 +704,21 @@ var result = await client.Webhooks.CreateAsync(new CreateWebhookRequest(
 // In your webhook endpoint:
 var evt = ParceleMaisWebhookEvent.Parse(rawBody, signatureHeader, storedSigningSecret);
 ```
+
+### Delivery audit
+
+`ListAuditAsync` (`GET /v1/webhooks/auditoria`) returns one `WebhookAudit` per delivery attempt — including failed attempts and ones where your endpoint was unreachable — newest first. Every filter is optional: date range (`StartDate`/`EndDate`), `OrderId`, `OrderNumber`, and `StatusCode` (the HTTP status your endpoint returned). Paging works like Orders/Customers: `Page` defaults to 1, `PageSize` to 10, no auto-pagination — check `HasNext`/`TotalCount` on the returned `PagedResult<WebhookAudit>`.
+
+```csharp
+var failures = await client.Webhooks.ListAuditAsync(new ListWebhookAuditRequest(
+    StartDate: DateTimeOffset.UtcNow.AddDays(-1), StatusCode: 500));
+
+foreach (var attempt in failures.Items)
+    Console.WriteLine($"{attempt.CreatedAt:u} {attempt.StatusCode}: {attempt.Response}");
+```
+
+- Filter by `StatusCode` (e.g. `500`) to find failed deliveries.
+- `Request`/`Response` are the raw text bodies sent to and received from your endpoint — not parsed JSON.
 
 ### Error Handling and Edge Cases
 
@@ -993,7 +1018,7 @@ CreateEstablishmentRequest.builder()
     .document("12345678000199") // CNPJ, digits only
     .legalName("...").tradeName("...")
     .disbursementModel(DisbursementModel.ESTABLISHMENT_CHAIN)
-    .owner(owner).bankAccount(bankAccount).address(address) // address is optional
+    .owner(owner).bankAccount(bankAccount).address(address) // required (@NonNull — build() throws NullPointerException without it)
     .build();
 
 // Establishment — returned by get() and list():
@@ -1064,6 +1089,8 @@ public interface WebhooksClient {
     List<Webhook> list();
     void update(WebHookType type, UpdateWebhookRequest request);
     void delete(WebHookType type);
+    PagedResult<WebhookAudit> listAudit(); // default: page 1, pageSize 10, no filters
+    PagedResult<WebhookAudit> listAudit(ListWebhookAuditRequest request);
 }
 
 @Value @Builder
@@ -1085,6 +1112,27 @@ public class OrderWebhookEvent {
     OrderStatus status;
     int statusRaw;
     String statusName;
+}
+
+@Value @Builder
+public class ListWebhookAuditRequest {
+    OffsetDateTime startDate;
+    OffsetDateTime endDate;
+    UUID orderId;
+    Long orderNumber;
+    Integer statusCode;
+    @Builder.Default int page = 1;
+    @Builder.Default int pageSize = 10;
+}
+
+@Value @Builder
+public class WebhookAudit {
+    UUID id;
+    WebHookType type;
+    String request;  // raw body sent to your endpoint
+    String response; // raw body your endpoint returned
+    int statusCode;
+    OffsetDateTime createdAt;
 }
 ```
 
@@ -1120,6 +1168,24 @@ CreateWebhookResult result = client.webhooks().create(CreateWebhookRequest.build
 
 // persist result.getSigningSecret() securely
 ```
+
+### Delivery audit
+
+`listAudit(...)` (`GET /v1/webhooks/auditoria`) returns one `WebhookAudit` per delivery attempt — including failed attempts and ones where your endpoint was unreachable — newest first. Every filter is optional: date range (`startDate`/`endDate`), `orderId`, `orderNumber`, and `statusCode` (the HTTP status your endpoint returned). Paging works like Orders/Customers: `page` defaults to 1, `pageSize` to 10, no auto-pagination — check `isHasNext()`/`getTotalCount()` on the returned `PagedResult<WebhookAudit>`.
+
+```java
+PagedResult<WebhookAudit> failures = client.webhooks().listAudit(ListWebhookAuditRequest.builder()
+        .startDate(OffsetDateTime.now().minusDays(1))
+        .statusCode(500)
+        .build());
+
+for (WebhookAudit attempt : failures.getItems()) {
+    System.out.println(attempt.getCreatedAt() + " " + attempt.getStatusCode() + ": " + attempt.getResponse());
+}
+```
+
+- Filter by `statusCode` (e.g. `500`) to find failed deliveries.
+- `request`/`response` are the raw text bodies sent to and received from your endpoint — not parsed JSON.
 
 ### Error Handling and Edge Cases
 
@@ -1431,7 +1497,7 @@ interface CreateEstablishmentRequest {
   disbursementModel: DisbursementModel;
   owner: EstablishmentOwner;
   bankAccount: EstablishmentBankAccount;
-  address?: EstablishmentAddress;
+  address: EstablishmentAddress;          // required on create
 }
 
 interface Establishment {
@@ -1541,9 +1607,28 @@ interface OrderWebhookEvent {
   statusRaw: number;
   statusName: string;
 }
+
+interface ListWebhookAuditRequest {
+  startDate?: string | Date;
+  endDate?: string | Date;
+  orderId?: string;
+  orderNumber?: number;
+  statusCode?: number;
+  page?: number;     // default 1
+  pageSize?: number; // default 10
+}
+
+interface WebhookAudit {
+  id: string;
+  type: WebHookType;
+  request: string;  // raw body sent to your endpoint
+  response: string; // raw body your endpoint returned
+  statusCode: number;
+  createdAt: string;
+}
 ```
 
-`client.webhooks` exposes: `create(request)`, `list()`, `update(type, request)`, `delete(type)`. There's exactly one webhook per `WebHookType` — `create`/`update` target it by type, not by an opaque webhook ID.
+`client.webhooks` exposes: `create(request)`, `list()`, `update(type, request)`, `delete(type)`, `listAudit(request?)` (returns `Promise<PagedResult<WebhookAudit>>`). There's exactly one webhook per `WebHookType` — `create`/`update` target it by type, not by an opaque webhook ID.
 
 ### Setup
 
@@ -1570,6 +1655,24 @@ app.post('/webhooks/parcelemais', express.text({ type: '*/*' }), (req, res) => {
 ```
 
 `parseWebhookEvent` computes `HMAC-SHA256("{timestamp}.{rawBody}", signingSecret)`, compares it to the `v1=` field of the signature header using a constant-time comparison, and rejects timestamps older than 5 minutes (replay protection) — all of that is handled for you; just pass the **raw, unparsed** request body (not `req.body` already JSON-parsed by a body-parser middleware) and the signature header.
+
+### Delivery audit
+
+`listAudit(request?)` (`GET /v1/webhooks/auditoria`) returns one `WebhookAudit` per delivery attempt — including failed attempts and ones where your endpoint was unreachable — newest first. Every filter is optional: date range (`startDate`/`endDate`), `orderId`, `orderNumber`, and `statusCode` (the HTTP status your endpoint returned). Paging works like Orders/Customers: `page` defaults to 1, `pageSize` to 10, no auto-pagination — check `hasNext`/`totalCount` on the returned `PagedResult<WebhookAudit>`.
+
+```typescript
+const failures = await client.webhooks.listAudit({
+  startDate: new Date(Date.now() - 24 * 60 * 60 * 1000),
+  statusCode: 500,
+});
+
+for (const attempt of failures.items) {
+  console.log(attempt.createdAt, attempt.statusCode, attempt.response);
+}
+```
+
+- Filter by `statusCode` (e.g. `500`) to find failed deliveries.
+- `request`/`response` are the raw text bodies sent to and received from your endpoint — not parsed JSON.
 
 ### Error Handling and Edge Cases
 - `parseWebhookEvent` throws `ParceleMaisWebhookSignatureError` for: malformed signature header, signature mismatch, and stale timestamp (possible replay) — catch it specifically and respond `401`, not `500`.
@@ -1815,7 +1918,7 @@ class CreateEstablishmentRequest:
     disbursement_model: DisbursementModel
     owner: EstablishmentOwner
     bank_account: EstablishmentBankAccount
-    address: Optional[EstablishmentAddress] = None
+    address: EstablishmentAddress                            # required on create
 
 @dataclass(frozen=True)
 class Establishment:
@@ -1903,6 +2006,8 @@ from twila_parcelemais import (
     CreateWebhookResult,
     UpdateWebhookRequest,
     OrderWebhookEvent,     # order_id, status (OrderStatus), status_raw (int), status_name (str)
+    ListWebhookAuditRequest,  # start_date/end_date (str | date | datetime), order_id (str), order_number (int), status_code (int), page=1, page_size=10 — all optional
+    WebhookAudit,          # id (str), type (WebHookType), request (str), response (str), status_code (int), created_at (str)
 )
 from twila_parcelemais import parse_webhook_event, compute_webhook_signature
 ```
@@ -1911,6 +2016,7 @@ from twila_parcelemais import parse_webhook_event, compute_webhook_signature
 
 - `client.webhooks.create(request: CreateWebhookRequest) -> CreateWebhookResult` — returns `signing_secret`; store it, it's shown only once.
 - `client.webhooks.list() -> list[Webhook]`
+- `client.webhooks.list_audit(request: ListWebhookAuditRequest | None = None) -> PagedResult[WebhookAudit]` — delivery audit (see below).
 - `client.webhooks.update(type: WebHookType, request: UpdateWebhookRequest) -> None`
 - `client.webhooks.delete(type: WebHookType) -> None`
 - `parse_webhook_event(raw_json, signature_header, signing_secret) -> OrderWebhookEvent` — verifies the HMAC signature (when `signature_header`/`signing_secret` are given) and decodes the event in one call.
@@ -1941,6 +2047,23 @@ if event.status == OrderStatus.PURCHASED:
 - The signature format is `t=<unix_timestamp>,v1=<hex_hmac_sha256>` over `"{timestamp}.{raw_body}"`; verification uses `hmac.compare_digest` (constant-time) and rejects events more than 5 minutes old (replay protection) — both happen automatically inside `parse_webhook_event`.
 - `parse_webhook_event` raises `ParceleMaisWebhookSignatureError` on a bad signature, malformed header, or expired timestamp, and on invalid/empty JSON — always wrap the call in a `try/except` and respond `401`, never `200`, on failure.
 - Respond `200` promptly after verifying and enqueuing processing — don't do slow synchronous work in the handler, or Parcele+ may consider the delivery failed and retry.
+
+### Delivery audit
+
+`list_audit` (`GET /v1/webhooks/auditoria`) returns one `WebhookAudit` per delivery attempt — including failed attempts and ones where your endpoint was unreachable — newest first. Every filter is optional: date range (`start_date`/`end_date`), `order_id`, `order_number`, and `status_code` (the HTTP status your endpoint returned). Paging works like Orders/Customers: `page` defaults to 1, `page_size` to 10, no auto-pagination — check `has_next`/`total_count` on the returned `PagedResult[WebhookAudit]`.
+
+```python
+from datetime import datetime, timedelta, timezone
+
+failures = client.webhooks.list_audit(
+    ListWebhookAuditRequest(start_date=datetime.now(timezone.utc) - timedelta(days=1), status_code=500)
+)
+for attempt in failures.items:
+    print(attempt.created_at, attempt.status_code, attempt.response)
+```
+
+- Filter by `status_code` (e.g. `500`) to find failed deliveries.
+- `request`/`response` are the raw text bodies sent to and received from your endpoint — not parsed JSON.
 
 ### Error Handling and Edge Cases
 
@@ -2212,7 +2335,7 @@ new CreateEstablishmentRequest(
     int $disbursementModel,
     EstablishmentOwner $owner,
     EstablishmentBankAccount $bankAccount,
-    ?EstablishmentAddress $address = null
+    EstablishmentAddress $address          // required on create
 );
 
 // Establishment — returned by get() and list():
@@ -2284,6 +2407,8 @@ use Twila\ParceleMais\Webhooks\CreateWebhookResult;
 use Twila\ParceleMais\Webhooks\UpdateWebhookRequest;
 use Twila\ParceleMais\Webhooks\WebhookEvent;
 use Twila\ParceleMais\Webhooks\OrderWebhookEvent;
+use Twila\ParceleMais\Webhooks\ListWebhookAuditRequest;
+use Twila\ParceleMais\Webhooks\WebhookAudit;
 
 final class CreateWebhookRequest {
     public int $type; // WebHookType::*
@@ -2300,6 +2425,19 @@ final class OrderWebhookEvent {
     public string $orderId; public int $status; // OrderStatus::*, already normalized
     public int $statusRaw; public string $statusName;
 }
+
+final class ListWebhookAuditRequest { // constructor args in this order, all optional
+    public ?string $startDate; public ?string $endDate; // ISO-8601 date-time strings
+    public ?string $orderId; public ?int $orderNumber;
+    public ?int $statusCode; // HTTP status your endpoint returned
+    public int $page = 1; public int $pageSize = 10;
+}
+
+final class WebhookAudit {
+    public string $id; public int $type; // WebHookType::*
+    public string $request; public string $response; // raw bodies sent / received
+    public int $statusCode; public string $createdAt;
+}
 ```
 
 `WebHookType`: `CUSTOMER = 1`, `SIMULATION = 2`, `ORDER = 3`. `WebHookAuthenticationType`: `NONE = 1`, `BASIC = 2`, `JWT = 3`.
@@ -2308,6 +2446,7 @@ final class OrderWebhookEvent {
 
 - `$client->webhooks->create(CreateWebhookRequest $request): CreateWebhookResult` — returns `signingSecret`, used to verify incoming events. **Save it** — it isn't retrievable again later.
 - `$client->webhooks->list(): Webhook[]`
+- `$client->webhooks->listAudit(?ListWebhookAuditRequest $request = null): PagedResult` — delivery audit; `items` are `WebhookAudit` (see below).
 - `$client->webhooks->update(int $type, UpdateWebhookRequest $request): void`
 - `$client->webhooks->delete(int $type): void`
 - `WebhookEvent::parse(string $rawJson, ?string $signatureHeader = null, ?string $signingSecret = null): OrderWebhookEvent` — decodes and, when both `$signatureHeader` and `$signingSecret` are given, verifies the HMAC-SHA256 signature and replay window before returning.
@@ -2335,6 +2474,25 @@ Always verify the webhook signature to ensure the request really comes from Parc
 2. `WebhookEvent::parse()` recomputes `hash_hmac('sha256', "{$timestamp}.{$rawBody}", $signingSecret)` and compares it to `v1` using `hash_equals()` (constant-time, prevents timing attacks).
 3. It also rejects events whose timestamp is more than 5 minutes old — mitigates replay attacks with a captured, still-valid-looking payload.
 4. Store `signingSecret` the same way you store `clientSecret` — environment variable or secrets manager, never in version control.
+
+### Delivery audit
+
+`listAudit()` (`GET /v1/webhooks/auditoria`) returns one `WebhookAudit` per delivery attempt — including failed attempts and ones where your endpoint was unreachable — newest first. Every filter is optional: date range (`startDate`/`endDate`, ISO-8601 strings), `orderId`, `orderNumber`, and `statusCode` (the HTTP status your endpoint returned). Paging works like Orders/Customers: `page` defaults to 1, `pageSize` to 10, no auto-pagination — check `$page->hasNext`/`$page->totalCount`.
+
+```php
+$failures = $client->webhooks->listAudit(new ListWebhookAuditRequest(
+    (new DateTimeImmutable('-1 day'))->format(DATE_ATOM), // startDate
+    null, null, null,
+    500 // statusCode
+));
+
+foreach ($failures->items as $attempt) { // WebhookAudit
+    echo "{$attempt->createdAt} {$attempt->statusCode}: {$attempt->response}\n";
+}
+```
+
+- Filter by `statusCode` (e.g. `500`) to find failed deliveries.
+- `request`/`response` are the raw text bodies sent to and received from your endpoint — not parsed JSON.
 
 ### Error Handling and Edge Cases
 
@@ -2662,7 +2820,7 @@ type CreateEstablishmentRequest struct {
     DisbursementModel DisbursementModel
     Owner             EstablishmentOwner
     BankAccount       EstablishmentBankAccount
-    Address           *EstablishmentAddress // optional
+    Address           EstablishmentAddress  // required (value, not pointer) — a zero-value address is rejected with 400
 }
 
 type Establishment struct {
@@ -2775,6 +2933,25 @@ type OrderWebhookEvent struct {
 	StatusRaw  int
 	StatusName string
 }
+
+type ListWebhookAuditRequest struct { // all filters optional — empty strings / nil pointers are omitted
+	StartDate   string // ISO-8601 date-time
+	EndDate     string // ISO-8601 date-time
+	OrderID     string
+	OrderNumber *int64
+	StatusCode  *int // HTTP status your endpoint returned
+	Page        int  // 0 → 1
+	PageSize    int  // 0 → 10
+}
+
+type WebhookAudit struct {
+	ID         string
+	Type       WebHookType
+	Request    string // raw body sent to your endpoint
+	Response   string // raw body your endpoint returned
+	StatusCode int
+	CreatedAt  string
+}
 ```
 
 ### Setup
@@ -2782,6 +2959,7 @@ type OrderWebhookEvent struct {
 1. `client.Webhooks.Create(ctx, CreateWebhookRequest{Type: parcelemais.WebHookTypeOrder, URL: "https://yourapp.com/webhooks/parcelemais", AuthenticationType: parcelemais.WebHookAuthenticationTypeNone})`.
 2. Store the returned `SigningSecret` securely (env var/secret manager) — it's shown only once, at creation time.
 3. `client.Webhooks.List(ctx)` / `.Update(ctx, webhookType, req)` / `.Delete(ctx, webhookType)` manage existing registrations, keyed by `WebHookType` (one webhook per type).
+4. `client.Webhooks.ListAudit(ctx, ListWebhookAuditRequest{...})` returns `(*PagedResult[WebhookAudit], error)` — the delivery audit (see below).
 
 ### Security: Signature Verification
 
@@ -2818,6 +2996,27 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 ```
+
+### Delivery audit
+
+`ListAudit` (`GET /v1/webhooks/auditoria`) returns one `WebhookAudit` per delivery attempt — including failed attempts and ones where your endpoint was unreachable — newest first. Every filter is optional: date range (`StartDate`/`EndDate`), `OrderID`, `OrderNumber`, and `StatusCode` (the HTTP status your endpoint returned). Paging works like Orders/Customers: `Page` defaults to 1, `PageSize` to 10, no auto-pagination — advance `Page` explicitly and check `result.HasNext`.
+
+```go
+status := 500
+failures, err := client.Webhooks.ListAudit(ctx, parcelemais.ListWebhookAuditRequest{
+	StartDate:  time.Now().Add(-24 * time.Hour).UTC().Format(time.RFC3339),
+	StatusCode: &status,
+})
+if err != nil {
+	return err
+}
+for _, attempt := range failures.Items {
+	fmt.Println(attempt.CreatedAt, attempt.StatusCode, attempt.Response)
+}
+```
+
+- Filter by `StatusCode` (e.g. `500`) to find failed deliveries.
+- `Request`/`Response` are the raw text bodies sent to and received from your endpoint — not parsed JSON.
 
 ### Handling Failures and Edge Cases
 
@@ -3069,6 +3268,16 @@ public static class WebhooksExample
             // Respond 401 to the caller — do not process the event.
             return null;
         }
+    }
+
+    // Delivery audit: failed attempts (HTTP 500 from your endpoint) in the last 24h, newest first.
+    public static async Task<PagedResult<WebhookAudit>> ListFailedDeliveriesAsync(IParceleMaisClient client, CancellationToken ct = default)
+    {
+        var page = await client.Webhooks.ListAuditAsync(
+            new ListWebhookAuditRequest(StartDate: DateTimeOffset.UtcNow.AddDays(-1), StatusCode: 500), ct);
+
+        // No auto-pagination — request Page = 2, 3, ... while page.HasNext is true.
+        return page;
     }
 }
 ```
@@ -3332,14 +3541,18 @@ public final class EstablishmentsExample {
 
 ### Webhooks
 ```java
+import java.time.OffsetDateTime;
+import twila.parcelemais.PagedResult;
 import twila.parcelemais.ParceleMaisClient;
 import twila.parcelemais.errors.ParceleMaisWebhookSignatureException;
 import twila.parcelemais.webhooks.ParceleMaisWebhookEvent;
 import twila.parcelemais.webhooks.model.CreateWebhookRequest;
 import twila.parcelemais.webhooks.model.CreateWebhookResult;
+import twila.parcelemais.webhooks.model.ListWebhookAuditRequest;
 import twila.parcelemais.webhooks.model.OrderWebhookEvent;
 import twila.parcelemais.webhooks.model.WebHookAuthenticationType;
 import twila.parcelemais.webhooks.model.WebHookType;
+import twila.parcelemais.webhooks.model.WebhookAudit;
 
 public final class WebhooksExample {
 
@@ -3365,6 +3578,17 @@ public final class WebhooksExample {
             System.err.println("Assinatura de webhook inválida: " + ex.getMessage());
             return 401;
         }
+    }
+
+    /** Delivery audit: failed attempts (HTTP 500 from your endpoint) in the last 24h, newest first. */
+    public static PagedResult<WebhookAudit> listFailedDeliveries(ParceleMaisClient client) {
+        PagedResult<WebhookAudit> page = client.webhooks().listAudit(ListWebhookAuditRequest.builder()
+                .startDate(OffsetDateTime.now().minusDays(1))
+                .statusCode(500)
+                .build());
+
+        // No auto-pagination — request .page(2), .page(3), ... while page.isHasNext() is true.
+        return page;
     }
 }
 ```
@@ -3599,6 +3823,8 @@ import {
   WebHookAuthenticationType,
   parseWebhookEvent,
   ParceleMaisWebhookSignatureError,
+  type PagedResult,
+  type WebhookAudit,
 } from '@twila/parcelemais';
 
 const client = new ParceleMaisClient({
@@ -3616,6 +3842,17 @@ export async function registerOrderWebhook(url: string) {
 
   // Store result.signingSecret securely (e.g. secrets manager) — shown only once.
   return result.signingSecret;
+}
+
+// Delivery audit: failed attempts (HTTP 500 from your endpoint) in the last 24h, newest first.
+export async function listFailedDeliveries(): Promise<PagedResult<WebhookAudit>> {
+  const page = await client.webhooks.listAudit({
+    startDate: new Date(Date.now() - 24 * 60 * 60 * 1000),
+    statusCode: 500,
+  });
+
+  // No auto-pagination — request page: 2, 3, ... while page.hasNext is true.
+  return page;
 }
 
 const app = express();
@@ -3867,15 +4104,20 @@ def reopen_establishment(client: ParceleMaisClient, establishment_id: str) -> No
 
 ### Webhooks
 ```python
-"""Webhook registration and signature verification — see rules/python/webhooks.md."""
+"""Webhook registration, signature verification and delivery audit — see rules/python/webhooks.md."""
+
+from datetime import datetime, timedelta, timezone
 
 from twila_parcelemais import (
     CreateWebhookRequest,
+    ListWebhookAuditRequest,
     OrderStatus,
+    PagedResult,
     ParceleMaisClient,
     ParceleMaisWebhookSignatureError,
     WebHookAuthenticationType,
     WebHookType,
+    WebhookAudit,
     parse_webhook_event,
 )
 
@@ -3900,6 +4142,15 @@ def handle_incoming_webhook(raw_body: str, signature_header: str, signing_secret
         print(f"Pedido {event.order_id} desembolsado.")
     else:
         print(f"Pedido {event.order_id}: {event.status_name}")
+
+
+def list_failed_deliveries(client: ParceleMaisClient) -> PagedResult[WebhookAudit]:
+    """Delivery audit: failed attempts (HTTP 500 from your endpoint) in the last 24h, newest first."""
+    page = client.webhooks.list_audit(
+        ListWebhookAuditRequest(start_date=datetime.now(timezone.utc) - timedelta(days=1), status_code=500)
+    )
+    # No auto-pagination — request page=2, 3, ... while page.has_next is True.
+    return page
 ```
 
 ---
@@ -4122,6 +4373,7 @@ use Twila\ParceleMais\Config\Environment;
 use Twila\ParceleMais\Errors\ParceleMaisWebhookSignatureException;
 use Twila\ParceleMais\ParceleMaisClient;
 use Twila\ParceleMais\Webhooks\CreateWebhookRequest;
+use Twila\ParceleMais\Webhooks\ListWebhookAuditRequest;
 use Twila\ParceleMais\Webhooks\WebHookAuthenticationType;
 use Twila\ParceleMais\Webhooks\WebHookType;
 use Twila\ParceleMais\Webhooks\WebhookEvent;
@@ -4140,6 +4392,17 @@ $result = $client->webhooks->create(new CreateWebhookRequest(
 ));
 // Persist $result->signingSecret in your own secrets storage — it is not retrievable again.
 $signingSecret = $result->signingSecret;
+
+// Delivery audit: failed attempts (HTTP 500 from your endpoint) in the last 24h, newest first.
+$failures = $client->webhooks->listAudit(new ListWebhookAuditRequest(
+    (new DateTimeImmutable('-1 day'))->format(DATE_ATOM), // startDate
+    null, null, null,
+    500 // statusCode
+));
+foreach ($failures->items as $attempt) {
+    echo "{$attempt->createdAt} {$attempt->statusCode}: {$attempt->response}\n";
+}
+// No auto-pagination — pass page 2, 3, ... while $failures->hasNext is true.
 
 // --- In your webhook HTTP endpoint ---
 function handleParceleMaisWebhook(string $rawBody, string $signatureHeader, string $signingSecret): void
@@ -4351,7 +4614,7 @@ func createEstablishment(ctx context.Context, client *parcelemais.Client) string
 			AccountDigit:  "0",
 			AccountType:   parcelemais.BankAccountTypeCurrent,
 		},
-		Address: &parcelemais.EstablishmentAddress{
+		Address: parcelemais.EstablishmentAddress{
 			Street:   "Rua Exemplo",
 			Number:   "100",
 			District: "Centro",
@@ -4462,6 +4725,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"time"
 
 	parcelemais "github.com/Twila-Digital/twila-parcelemais-go-sdk"
 )
@@ -4477,6 +4741,20 @@ func registerOrderWebhook(ctx context.Context, client *parcelemais.Client, url s
 	}
 	// Guarde result.SigningSecret com segurança — é usado pra validar eventos recebidos.
 	return result.SigningSecret
+}
+
+// Auditoria de entregas: tentativas que falharam (HTTP 500 no seu endpoint) nas últimas 24h, mais recentes primeiro.
+func listFailedDeliveries(ctx context.Context, client *parcelemais.Client) *parcelemais.PagedResult[parcelemais.WebhookAudit] {
+	status := 500
+	page, err := client.Webhooks.ListAudit(ctx, parcelemais.ListWebhookAuditRequest{
+		StartDate:  time.Now().Add(-24 * time.Hour).UTC().Format(time.RFC3339),
+		StatusCode: &status,
+	})
+	if err != nil {
+		log.Fatalf("list webhook audit: %v", err)
+	}
+	// Sem auto-paginação — peça Page: 2, 3, ... enquanto page.HasNext for true.
+	return page
 }
 
 func webhookHandler(signingSecret string) http.HandlerFunc {

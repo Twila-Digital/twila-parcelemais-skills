@@ -34,9 +34,28 @@ interface OrderWebhookEvent {
   statusRaw: number;
   statusName: string;
 }
+
+interface ListWebhookAuditRequest {
+  startDate?: string | Date;
+  endDate?: string | Date;
+  orderId?: string;
+  orderNumber?: number;
+  statusCode?: number;
+  page?: number;     // default 1
+  pageSize?: number; // default 10
+}
+
+interface WebhookAudit {
+  id: string;
+  type: WebHookType;
+  request: string;  // raw body sent to your endpoint
+  response: string; // raw body your endpoint returned
+  statusCode: number;
+  createdAt: string;
+}
 ```
 
-`client.webhooks` exposes: `create(request)`, `list()`, `update(type, request)`, `delete(type)`. There's exactly one webhook per `WebHookType` — `create`/`update` target it by type, not by an opaque webhook ID.
+`client.webhooks` exposes: `create(request)`, `list()`, `update(type, request)`, `delete(type)`, `listAudit(request?)` (returns `Promise<PagedResult<WebhookAudit>>`). There's exactly one webhook per `WebHookType` — `create`/`update` target it by type, not by an opaque webhook ID.
 
 ## Setup
 
@@ -63,6 +82,24 @@ app.post('/webhooks/parcelemais', express.text({ type: '*/*' }), (req, res) => {
 ```
 
 `parseWebhookEvent` computes `HMAC-SHA256("{timestamp}.{rawBody}", signingSecret)`, compares it to the `v1=` field of the signature header using a constant-time comparison, and rejects timestamps older than 5 minutes (replay protection) — all of that is handled for you; just pass the **raw, unparsed** request body (not `req.body` already JSON-parsed by a body-parser middleware) and the signature header.
+
+## Delivery audit
+
+`listAudit(request?)` (`GET /v1/webhooks/auditoria`) returns one `WebhookAudit` per delivery attempt — including failed attempts and ones where your endpoint was unreachable — newest first. Every filter is optional: date range (`startDate`/`endDate`), `orderId`, `orderNumber`, and `statusCode` (the HTTP status your endpoint returned). Paging works like Orders/Customers: `page` defaults to 1, `pageSize` to 10, no auto-pagination — check `hasNext`/`totalCount` on the returned `PagedResult<WebhookAudit>`.
+
+```typescript
+const failures = await client.webhooks.listAudit({
+  startDate: new Date(Date.now() - 24 * 60 * 60 * 1000),
+  statusCode: 500,
+});
+
+for (const attempt of failures.items) {
+  console.log(attempt.createdAt, attempt.statusCode, attempt.response);
+}
+```
+
+- Filter by `statusCode` (e.g. `500`) to find failed deliveries.
+- `request`/`response` are the raw text bodies sent to and received from your endpoint — not parsed JSON.
 
 ## Error Handling and Edge Cases
 - `parseWebhookEvent` throws `ParceleMaisWebhookSignatureError` for: malformed signature header, signature mismatch, and stale timestamp (possible replay) — catch it specifically and respond `401`, not `500`.

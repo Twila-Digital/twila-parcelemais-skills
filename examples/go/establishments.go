@@ -27,7 +27,7 @@ func createEstablishment(ctx context.Context, client *parcelemais.Client) string
 			AccountDigit:  "0",
 			AccountType:   parcelemais.BankAccountTypeCurrent,
 		},
-		Address: &parcelemais.EstablishmentAddress{
+		Address: parcelemais.EstablishmentAddress{
 			Street:   "Rua Exemplo",
 			Number:   "100",
 			District: "Centro",

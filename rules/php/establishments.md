@@ -46,7 +46,7 @@ new CreateEstablishmentRequest(
     int $disbursementModel,
     EstablishmentOwner $owner,
     EstablishmentBankAccount $bankAccount,
-    ?EstablishmentAddress $address = null
+    EstablishmentAddress $address          // required on create
 );
 
 // Establishment — returned by get() and list():

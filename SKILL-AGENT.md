@@ -148,7 +148,7 @@ curl -s -X POST "$PARCELEMAIS_BASE_URL/v1/establishment" \
     "endereco": {"rua": "Rua Exemplo", "numero": "100", "bairro": "Centro", "cidade": "São Paulo", "estado": "SP", "cep": "01310100"}
   }' | jq
 ```
-`modeloDesembolso`: `1` chain receives, `2` the establishment itself receives (requires the establishment's bank account), `3` third-party account (requires `nomeTitular` and `documentoTitular`). `tipoConta`: `1` Current, `2` Savings, `3` Payment. `endereco` is optional on creation.
+`modeloDesembolso`: `1` chain receives, `2` the establishment itself receives (requires the establishment's bank account), `3` third-party account (requires `nomeTitular` and `documentoTitular`). `tipoConta`: `1` Current, `2` Savings, `3` Payment. `endereco` is required on creation — only `complemento` and `pais` (defaults to Brasil) are optional; without it the API returns `400`.
 Response: `{"estabelecimentoId": "..."}` — save it, it's what allows editing and changing the establishment status later.
 
 **Get an establishment**
@@ -218,6 +218,13 @@ curl -s -X PUT "$PARCELEMAIS_BASE_URL/v1/webhooks/3" \
 ```bash
 curl -s -X DELETE "$PARCELEMAIS_BASE_URL/v1/webhooks/3" -H "Authorization: Bearer $TOKEN" | jq
 ```
+
+**Webhook delivery audit (paged)**
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "$PARCELEMAIS_BASE_URL/v1/webhooks/auditoria?statusCode=500&pagina=1&tamanhoPagina=10" | jq
+```
+History of webhook deliveries to your endpoint, newest first — one row per attempt (`id`, `tipo`, `requisicao`, `resposta`, `statusCode`, `dataCriacao`). Optional filters: `dataInicio`, `dataFim` (ISO-8601), `pedidoId`, `numeroPedido`, `statusCode` (100–599). Paged via `pagina` (default 1) and `tamanhoPagina` (default 10, max 100); the response has `itens` and `pagina` (`tem_proximo`, `total`...). Filter by `statusCode` to find failed deliveries — an unreachable endpoint is also recorded as `500`. `dataInicio` after `dataFim` returns `400`.
 
 ---
 

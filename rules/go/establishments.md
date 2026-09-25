@@ -49,7 +49,7 @@ type CreateEstablishmentRequest struct {
     DisbursementModel DisbursementModel
     Owner             EstablishmentOwner
     BankAccount       EstablishmentBankAccount
-    Address           *EstablishmentAddress // optional
+    Address           EstablishmentAddress  // required (value, not pointer) — a zero-value address is rejected with 400
 }
 
 type Establishment struct {

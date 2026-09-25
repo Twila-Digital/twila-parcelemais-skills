@@ -29,4 +29,14 @@ public static class WebhooksExample
             return null;
         }
     }
+
+    // Delivery audit: failed attempts (HTTP 500 from your endpoint) in the last 24h, newest first.
+    public static async Task<PagedResult<WebhookAudit>> ListFailedDeliveriesAsync(IParceleMaisClient client, CancellationToken ct = default)
+    {
+        var page = await client.Webhooks.ListAuditAsync(
+            new ListWebhookAuditRequest(StartDate: DateTimeOffset.UtcNow.AddDays(-1), StatusCode: 500), ct);
+
+        // No auto-pagination — request Page = 2, 3, ... while page.HasNext is true.
+        return page;
+    }
 }

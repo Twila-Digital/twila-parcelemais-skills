@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"time"
 
 	parcelemais "github.com/Twila-Digital/twila-parcelemais-go-sdk"
 )
@@ -22,6 +23,20 @@ func registerOrderWebhook(ctx context.Context, client *parcelemais.Client, url s
 	}
 	// Guarde result.SigningSecret com segurança — é usado pra validar eventos recebidos.
 	return result.SigningSecret
+}
+
+// Auditoria de entregas: tentativas que falharam (HTTP 500 no seu endpoint) nas últimas 24h, mais recentes primeiro.
+func listFailedDeliveries(ctx context.Context, client *parcelemais.Client) *parcelemais.PagedResult[parcelemais.WebhookAudit] {
+	status := 500
+	page, err := client.Webhooks.ListAudit(ctx, parcelemais.ListWebhookAuditRequest{
+		StartDate:  time.Now().Add(-24 * time.Hour).UTC().Format(time.RFC3339),
+		StatusCode: &status,
+	})
+	if err != nil {
+		log.Fatalf("list webhook audit: %v", err)
+	}
+	// Sem auto-paginação — peça Page: 2, 3, ... enquanto page.HasNext for true.
+	return page
 }
 
 func webhookHandler(signingSecret string) http.HandlerFunc {

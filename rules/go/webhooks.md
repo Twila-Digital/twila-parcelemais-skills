@@ -31,6 +31,25 @@ type OrderWebhookEvent struct {
 	StatusRaw  int
 	StatusName string
 }
+
+type ListWebhookAuditRequest struct { // all filters optional — empty strings / nil pointers are omitted
+	StartDate   string // ISO-8601 date-time
+	EndDate     string // ISO-8601 date-time
+	OrderID     string
+	OrderNumber *int64
+	StatusCode  *int // HTTP status your endpoint returned
+	Page        int  // 0 → 1
+	PageSize    int  // 0 → 10
+}
+
+type WebhookAudit struct {
+	ID         string
+	Type       WebHookType
+	Request    string // raw body sent to your endpoint
+	Response   string // raw body your endpoint returned
+	StatusCode int
+	CreatedAt  string
+}
 ```
 
 ## Setup
@@ -38,6 +57,7 @@ type OrderWebhookEvent struct {
 1. `client.Webhooks.Create(ctx, CreateWebhookRequest{Type: parcelemais.WebHookTypeOrder, URL: "https://yourapp.com/webhooks/parcelemais", AuthenticationType: parcelemais.WebHookAuthenticationTypeNone})`.
 2. Store the returned `SigningSecret` securely (env var/secret manager) — it's shown only once, at creation time.
 3. `client.Webhooks.List(ctx)` / `.Update(ctx, webhookType, req)` / `.Delete(ctx, webhookType)` manage existing registrations, keyed by `WebHookType` (one webhook per type).
+4. `client.Webhooks.ListAudit(ctx, ListWebhookAuditRequest{...})` returns `(*PagedResult[WebhookAudit], error)` — the delivery audit (see below).
 
 ## Security: Signature Verification
 
@@ -74,6 +94,27 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 ```
+
+## Delivery audit
+
+`ListAudit` (`GET /v1/webhooks/auditoria`) returns one `WebhookAudit` per delivery attempt — including failed attempts and ones where your endpoint was unreachable — newest first. Every filter is optional: date range (`StartDate`/`EndDate`), `OrderID`, `OrderNumber`, and `StatusCode` (the HTTP status your endpoint returned). Paging works like Orders/Customers: `Page` defaults to 1, `PageSize` to 10, no auto-pagination — advance `Page` explicitly and check `result.HasNext`.
+
+```go
+status := 500
+failures, err := client.Webhooks.ListAudit(ctx, parcelemais.ListWebhookAuditRequest{
+	StartDate:  time.Now().Add(-24 * time.Hour).UTC().Format(time.RFC3339),
+	StatusCode: &status,
+})
+if err != nil {
+	return err
+}
+for _, attempt := range failures.Items {
+	fmt.Println(attempt.CreatedAt, attempt.StatusCode, attempt.Response)
+}
+```
+
+- Filter by `StatusCode` (e.g. `500`) to find failed deliveries.
+- `Request`/`Response` are the raw text bodies sent to and received from your endpoint — not parsed JSON.
 
 ## Handling Failures and Edge Cases
 

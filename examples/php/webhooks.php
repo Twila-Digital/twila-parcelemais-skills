@@ -7,6 +7,7 @@ use Twila\ParceleMais\Config\Environment;
 use Twila\ParceleMais\Errors\ParceleMaisWebhookSignatureException;
 use Twila\ParceleMais\ParceleMaisClient;
 use Twila\ParceleMais\Webhooks\CreateWebhookRequest;
+use Twila\ParceleMais\Webhooks\ListWebhookAuditRequest;
 use Twila\ParceleMais\Webhooks\WebHookAuthenticationType;
 use Twila\ParceleMais\Webhooks\WebHookType;
 use Twila\ParceleMais\Webhooks\WebhookEvent;
@@ -25,6 +26,17 @@ $result = $client->webhooks->create(new CreateWebhookRequest(
 ));
 // Persist $result->signingSecret in your own secrets storage — it is not retrievable again.
 $signingSecret = $result->signingSecret;
+
+// Delivery audit: failed attempts (HTTP 500 from your endpoint) in the last 24h, newest first.
+$failures = $client->webhooks->listAudit(new ListWebhookAuditRequest(
+    (new DateTimeImmutable('-1 day'))->format(DATE_ATOM), // startDate
+    null, null, null,
+    500 // statusCode
+));
+foreach ($failures->items as $attempt) {
+    echo "{$attempt->createdAt} {$attempt->statusCode}: {$attempt->response}\n";
+}
+// No auto-pagination — pass page 2, 3, ... while $failures->hasNext is true.
 
 // --- In your webhook HTTP endpoint ---
 function handleParceleMaisWebhook(string $rawBody, string $signatureHeader, string $signingSecret): void

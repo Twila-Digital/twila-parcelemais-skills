@@ -13,6 +13,8 @@ use Twila\ParceleMais\Webhooks\CreateWebhookResult;
 use Twila\ParceleMais\Webhooks\UpdateWebhookRequest;
 use Twila\ParceleMais\Webhooks\WebhookEvent;
 use Twila\ParceleMais\Webhooks\OrderWebhookEvent;
+use Twila\ParceleMais\Webhooks\ListWebhookAuditRequest;
+use Twila\ParceleMais\Webhooks\WebhookAudit;
 
 final class CreateWebhookRequest {
     public int $type; // WebHookType::*
@@ -29,6 +31,19 @@ final class OrderWebhookEvent {
     public string $orderId; public int $status; // OrderStatus::*, already normalized
     public int $statusRaw; public string $statusName;
 }
+
+final class ListWebhookAuditRequest { // constructor args in this order, all optional
+    public ?string $startDate; public ?string $endDate; // ISO-8601 date-time strings
+    public ?string $orderId; public ?int $orderNumber;
+    public ?int $statusCode; // HTTP status your endpoint returned
+    public int $page = 1; public int $pageSize = 10;
+}
+
+final class WebhookAudit {
+    public string $id; public int $type; // WebHookType::*
+    public string $request; public string $response; // raw bodies sent / received
+    public int $statusCode; public string $createdAt;
+}
 ```
 
 `WebHookType`: `CUSTOMER = 1`, `SIMULATION = 2`, `ORDER = 3`. `WebHookAuthenticationType`: `NONE = 1`, `BASIC = 2`, `JWT = 3`.
@@ -37,6 +52,7 @@ final class OrderWebhookEvent {
 
 - `$client->webhooks->create(CreateWebhookRequest $request): CreateWebhookResult` — returns `signingSecret`, used to verify incoming events. **Save it** — it isn't retrievable again later.
 - `$client->webhooks->list(): Webhook[]`
+- `$client->webhooks->listAudit(?ListWebhookAuditRequest $request = null): PagedResult` — delivery audit; `items` are `WebhookAudit` (see below).
 - `$client->webhooks->update(int $type, UpdateWebhookRequest $request): void`
 - `$client->webhooks->delete(int $type): void`
 - `WebhookEvent::parse(string $rawJson, ?string $signatureHeader = null, ?string $signingSecret = null): OrderWebhookEvent` — decodes and, when both `$signatureHeader` and `$signingSecret` are given, verifies the HMAC-SHA256 signature and replay window before returning.
@@ -64,6 +80,25 @@ Always verify the webhook signature to ensure the request really comes from Parc
 2. `WebhookEvent::parse()` recomputes `hash_hmac('sha256', "{$timestamp}.{$rawBody}", $signingSecret)` and compares it to `v1` using `hash_equals()` (constant-time, prevents timing attacks).
 3. It also rejects events whose timestamp is more than 5 minutes old — mitigates replay attacks with a captured, still-valid-looking payload.
 4. Store `signingSecret` the same way you store `clientSecret` — environment variable or secrets manager, never in version control.
+
+## Delivery audit
+
+`listAudit()` (`GET /v1/webhooks/auditoria`) returns one `WebhookAudit` per delivery attempt — including failed attempts and ones where your endpoint was unreachable — newest first. Every filter is optional: date range (`startDate`/`endDate`, ISO-8601 strings), `orderId`, `orderNumber`, and `statusCode` (the HTTP status your endpoint returned). Paging works like Orders/Customers: `page` defaults to 1, `pageSize` to 10, no auto-pagination — check `$page->hasNext`/`$page->totalCount`.
+
+```php
+$failures = $client->webhooks->listAudit(new ListWebhookAuditRequest(
+    (new DateTimeImmutable('-1 day'))->format(DATE_ATOM), // startDate
+    null, null, null,
+    500 // statusCode
+));
+
+foreach ($failures->items as $attempt) { // WebhookAudit
+    echo "{$attempt->createdAt} {$attempt->statusCode}: {$attempt->response}\n";
+}
+```
+
+- Filter by `statusCode` (e.g. `500`) to find failed deliveries.
+- `request`/`response` are the raw text bodies sent to and received from your endpoint — not parsed JSON.
 
 ## Error Handling and Edge Cases
 
