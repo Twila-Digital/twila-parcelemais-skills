@@ -94,7 +94,22 @@ curl -s -X POST "$PARCELEMAIS_BASE_URL/v1/order/invoice" \
   -d '{"pedidoId": "ORDER_ID", "arquivoBase64": "'"$(base64 -w0 nota.pdf)"'", "nomeArquivo": "nota.pdf"}' | jq
 ```
 
-**Order status values** (`status.valor`): `0` Undefined, `1` Analysing, `2` Approved, `3` UnavailableBalance, `4` AnalysisExpired, `5` PendingPayment, `6` BiometryRefused, `7` BiometryApproved, `8` PaymentRefused, `9` Purchased, `10` Unauthorized, `11` PendingAuthorization, `12` AwaitingRegistration, `13` SaleNotStarted, `14` Canceled, `15` Billing, `16` Completed, `17` Frozen, `18` PendingPaymentConfirmation, `19` Disbursed.
+**Pending invoice (`20`, `PendingInvoice`)**
+
+The API presents this temporary external status only when the invoice is invalid and released for resubmission (`InvoiceStatus == Invalid` and `InvoiceImported == false`). These are internal conditions, not new public response fields. The real order status remains unchanged.
+
+`GET /v1/order/{pedidoId}` and `GET /v1/order/paged` return `status: {"valor": 20, "descricao": "Nota fiscal pendente"}`. Filter pending invoices with:
+
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "$PARCELEMAIS_BASE_URL/v1/order/paged?status=20&pagina=1&tamanhoPagina=10" | jq
+```
+
+The paginated response uses `itens`. The filter returns only invalid invoices released for resubmission, excluding invoices already resubmitted. `status=0` is not a valid filter.
+
+Resubmit the corrected file through `POST /v1/order/invoice` with the same `pedidoId`, `arquivoBase64`, and `nomeArquivo`. Once resubmission marks the invoice as imported, queries automatically show the real order status again. This does not mean the invoice has already been validated. Do not attempt to restore the previous status through the API.
+
+**Order status values** (`status.valor`): `0` Undefined, `1` Analysing, `2` Approved, `3` UnavailableBalance, `4` AnalysisExpired, `5` PendingPayment, `6` BiometryRefused, `7` BiometryApproved, `8` PaymentRefused, `9` Purchased, `10` Unauthorized, `11` PendingAuthorization, `12` AwaitingRegistration, `13` SaleNotStarted, `14` Canceled, `15` Billing, `16` Completed, `17` Frozen, `18` PendingPaymentConfirmation, `19` Disbursed, `20` PendingInvoice (Nota fiscal pendente).
 
 ---
 
@@ -192,6 +207,18 @@ An inactive establishment takes no new orders (in-flight orders are unaffected) 
 ---
 
 #### Webhooks
+
+An Order webhook (`tipo: 3`) also notifies you when an invalid invoice is released for resubmission:
+
+```json
+{
+  "id_pedido": "00000000-0000-0000-0000-000000000000",
+  "enum_status": 20,
+  "status": "PendingInvoice"
+}
+```
+
+Verify the HMAC signature against the raw body before processing. Query the order after resubmission; do not assume resubmission sends a webhook restoring the previous status. Authentication, signature verification, and delivery audit work as for other Order webhooks.
 
 **Register a webhook**
 ```bash

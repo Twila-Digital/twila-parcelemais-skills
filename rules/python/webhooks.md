@@ -72,6 +72,10 @@ for attempt in failures.items:
 - Filter by `status_code` (e.g. `500`) to find failed deliveries.
 - `request`/`response` are the raw text bodies sent to and received from your endpoint — not parsed JSON.
 
+## Pending invoice event
+
+Order webhooks (`tipo: 3`) can deliver `enum_status: 20` and `status: "PendingInvoice"` when an invalid invoice is released for resubmission. Read [the shared order status rules](../order-status.md) for the payload, resubmission flow, and handling older SDKs through the original status code and name.
+
 ## Error Handling and Edge Cases
 
 - `create` on a `type` that already has a webhook registered returns a conflict error — `list()` first if you're not sure one exists.

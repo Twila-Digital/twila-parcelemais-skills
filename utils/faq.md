@@ -20,3 +20,6 @@
 
 7. **Onde reporto um bug ou peço uma feature num SDK?**
    Abra uma issue ou PR no repositório do SDK correspondente (ver [tools/ecosystem.md](../tools/ecosystem.md)) — todos são open source e aceitam contribuição externa.
+
+8. **O que significa o status `20` (`PendingInvoice`)?**
+   A nota fiscal está inválida e liberada para reenvio. Você pode localizar os pedidos com `status=20` e reenviar o arquivo corrigido com o mesmo `pedidoId`. Após a importação, as consultas voltam a apresentar o status real do pedido. Veja [as regras de nota fiscal pendente](../rules/order-status.md).

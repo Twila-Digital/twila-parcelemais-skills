@@ -99,6 +99,10 @@ if (order.status === OrderStatus.Approved) {
 }
 ```
 
+## Pending invoice status
+
+The API can return `20` (`PendingInvoice`, `Nota fiscal pendente`) when an invoice is invalid and released for resubmission. Read [the shared order status rules](../order-status.md) for `status=20`, resubmission with the same order ID, and the return to the real order status. Verify support in the installed SDK before using a new enum member or a typed filter.
+
 ## Error Handling and Edge Cases
 - `create`/`get`/`list`/`startCdcSale`/`importInvoice` reject with `ParceleMaisValidationError` (400, has `fieldErrors`), `ParceleMaisApiError` (other status codes, has `errorCode`/`correlationId`), `ParceleMaisRateLimitError` (429, has `retryAfterMs`), or `ParceleMaisTimeoutError`/`ParceleMaisAuthenticationError` for transport/auth failures.
 - `startCdcSale` only makes sense once `status` is `Approved` — calling it earlier returns an API error, don't assume it always succeeds.

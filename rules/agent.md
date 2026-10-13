@@ -116,6 +116,8 @@ curl -s -X POST "$PARCELEMAIS_BASE_URL/v1/order/invoice" \
   -d '{"pedidoId": "ORDER_ID", "arquivoBase64": "'"$(base64 -w0 nota.pdf)"'", "nomeArquivo": "nota.pdf"}' | jq
 ```
 
+Para consultar a pendência com `status=20` e reenviar a nota fiscal com o mesmo `pedidoId`, leia [Status externo de pedido e nota fiscal pendente](order-status.md). O código `0` não é aceito como filtro.
+
 #### Status de pedido (`status.valor`)
 | Valor | Significado |
 | --- | --- |
@@ -139,6 +141,7 @@ curl -s -X POST "$PARCELEMAIS_BASE_URL/v1/order/invoice" \
 | 17 | Congelado |
 | 18 | Aguardando confirmação de pagamento |
 | 19 | Desembolsado |
+| 20 | Nota fiscal pendente (`PendingInvoice`) |
 
 ---
 
@@ -263,6 +266,8 @@ Loja inativa não aceita novos pedidos (os em andamento seguem normalmente) e n�
 ---
 
 ### Webhooks
+
+O webhook de Pedido (`tipo: 3`) pode enviar `enum_status: 20` e `status: "PendingInvoice"`. Consulte [as regras de nota fiscal pendente](order-status.md) antes de processar essa notificação.
 
 **Cadastrar webhook**
 ```bash
