@@ -77,6 +77,10 @@ foreach (var attempt in failures.Items)
 - Filter by `StatusCode` (e.g. `500`) to find failed deliveries.
 - `Request`/`Response` are the raw text bodies sent to and received from your endpoint — not parsed JSON.
 
+## Pending invoice event
+
+Order webhooks (`tipo: 3`) can deliver `enum_status: 20` and `status: "PendingInvoice"` when an invalid invoice is released for resubmission. Read [the shared order status rules](../order-status.md) for the payload, resubmission flow, and handling older SDKs through the original status code and name.
+
 ## Error Handling and Edge Cases
 
 - `ParceleMaisWebhookSignatureException` — signature mismatch, malformed `t=/v1=` header, or timestamp outside the 5-minute replay window. Always return `401` (not `200`) when this is thrown, so Parcele+ can retry/alert.

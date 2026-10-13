@@ -68,6 +68,8 @@ metadata:
 
 parts.push(stripFrontmatter(read("SKILL.md")).split("## File Index")[0].trim());
 
+parts.push("---\n\n## Rules: Order Status and Pending Invoice\n\n" + demoteHeadings(read("rules/order-status.md").replace(/^# .+\n/, "")));
+
 parts.push("---\n\n## Rules: Agent Mode — Direct API Usage\n\n" + demoteHeadings(read("rules/agent.md").replace(/^# .+\n/, "")));
 
 for (const [dir, label] of LANGUAGES) {
@@ -117,6 +119,7 @@ if (skillVisual) {
   parts.push("---\n\n## Visual Documentation\n" + skillVisual.trim());
 }
 
-const output = parts.join("\n\n") + "\n";
+const output = (parts.join("\n\n") + "\n")
+  .replace(/\]\((?:\.\.\/|rules\/)?order-status\.md\)/g, "](#rules-order-status-and-pending-invoice)");
 writeFileSync(join(root, "SKILL-CONSOLIDATED.md"), output);
 console.log(`SKILL-CONSOLIDATED.md gerado (${output.length} bytes).`);

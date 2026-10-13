@@ -116,6 +116,10 @@ for _, attempt := range failures.Items {
 - Filter by `StatusCode` (e.g. `500`) to find failed deliveries.
 - `Request`/`Response` are the raw text bodies sent to and received from your endpoint — not parsed JSON.
 
+## Pending invoice event
+
+Order webhooks (`tipo: 3`) can deliver `enum_status: 20` and `status: "PendingInvoice"` when an invalid invoice is released for resubmission. Read [the shared order status rules](../order-status.md) for the payload, resubmission flow, and handling older SDKs through the original status code and name.
+
 ## Handling Failures and Edge Cases
 
 - **Always respond `200`** once the event is durably queued/processed — a non-2xx response causes Parcele+ to retry delivery.

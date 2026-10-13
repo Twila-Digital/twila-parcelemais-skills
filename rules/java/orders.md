@@ -90,6 +90,10 @@ UUID orderId = client.orders().create(CreateOrderRequest.builder()
 Order order = client.orders().get(orderId);
 ```
 
+## Pending invoice status
+
+The API can return `20` (`PendingInvoice`, `Nota fiscal pendente`) when an invoice is invalid and released for resubmission. Read [the shared order status rules](../order-status.md) for `status=20`, resubmission with the same order ID, and the return to the real order status. Verify support in the installed SDK before using a new enum member or a typed filter.
+
 ## Error Handling and Edge Cases
 
 - `ParceleMaisValidationException` (400) — field-level validation errors via `getErrors()` (`Map<String, String[]>`).

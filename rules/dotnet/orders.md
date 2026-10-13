@@ -73,6 +73,10 @@ var orderId = await client.Orders.CreateAsync(new CreateOrderRequest(
 var order = await client.Orders.GetAsync(orderId);
 ```
 
+## Pending invoice status
+
+The API can return `20` (`PendingInvoice`, `Nota fiscal pendente`) when an invoice is invalid and released for resubmission. Read [the shared order status rules](../order-status.md) for `status=20`, resubmission with the same order ID, and the return to the real order status. Verify support in the installed SDK before using a new enum member or a typed filter.
+
 ## Error Handling and Edge Cases
 
 - `ParceleMaisValidationException` (400) — missing/invalid fields; check `.Errors` (per-field messages).

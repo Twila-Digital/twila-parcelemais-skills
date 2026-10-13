@@ -20,6 +20,8 @@ When the user wants to **perform actions directly** — create an order, simulat
 For **direct API usage** (agent mode), see:
 - [rules/agent.md](rules/agent.md) — execute API calls directly via curl (create orders, list customers, simulate installments, manage establishments and webhooks, etc.)
 
+For order status handling, invoice resubmission, or Order webhooks, first read [rules/order-status.md](#rules-order-status-and-pending-invoice). It defines `20` (`PendingInvoice`), filtering, and SDK compatibility.
+
 For **code integration**, read the rule file for the module and language you're using:
 
 - **Orders** (create, get, list, start CDC sale, import invoice): [dotnet](rules/dotnet/orders.md) / [java](rules/java/orders.md) / [node](rules/node/orders.md) / [python](rules/python/orders.md) / [php](rules/php/orders.md) / [go](rules/go/orders.md)
@@ -35,6 +37,73 @@ Use development tools for enhanced integration experience:
 - [tools/production.md](tools/production.md) — best practices before going live.
 - [tools/ecosystem.md](tools/ecosystem.md) — official SDKs, documentation, and this repository.
 - [tools/sdks/dotnet.md](tools/sdks/dotnet.md) / [java.md](tools/sdks/java.md) / [node.md](tools/sdks/node.md) / [python.md](tools/sdks/python.md) / [php.md](tools/sdks/php.md) / [go.md](tools/sdks/go.md) — install instructions per SDK.
+
+---
+
+## Rules: Order Status and Pending Invoice
+
+
+Use estas regras ao consultar pedidos, filtrar pendências de nota fiscal ou processar webhooks de Pedido. Elas descrevem a API pública, independentemente da linguagem ou versão do SDK.
+
+#### Quando você recebe `PendingInvoice`
+
+- Código: `20`.
+- Nome no webhook: `PendingInvoice`.
+- Descrição nas consultas: `Nota fiscal pendente`.
+
+Você recebe esse status quando a nota fiscal está inválida e liberada para reenvio. A regra exige as duas condições internas: `InvoiceStatus == Invalid` e `InvoiceImported == false`. Esses campos não são novos campos da resposta pública.
+
+O status é calculado para apresentação externa. Ele não altera o status real do pedido. Não trate `PendingInvoice` como cancelamento, nova análise de crédito ou mudança do desembolso.
+
+#### Consultar e filtrar pedidos
+
+`GET /v1/order/{pedidoId}` e `GET /v1/order/paged` apresentam este objeto `status` enquanto a condição estiver ativa:
+
+```json
+{
+  "valor": 20,
+  "descricao": "Nota fiscal pendente"
+}
+```
+
+Para localizar somente pedidos com nota fiscal inválida e liberada para reenvio, use o filtro `status=20`:
+
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "$PARCELEMAIS_BASE_URL/v1/order/paged?status=20&pagina=1&tamanhoPagina=10" | jq
+```
+
+A resposta paginada usa `itens`. Pedidos sem nota fiscal ou com nota já reenviada não atendem a esse filtro. O código `0` (`Undefined`) não é aceito como filtro.
+
+#### Reenviar a nota fiscal
+
+Envie o arquivo corrigido por `POST /v1/order/invoice`, com o mesmo `pedidoId`, `arquivoBase64` e `nomeArquivo`. Use o método de importação de nota fiscal do SDK se ele atender ao seu caso.
+
+Quando o reenvio marca a nota fiscal como importada, as consultas voltam automaticamente a apresentar o status real do pedido. Isso não significa que a nota fiscal já foi validada. Não tente restaurar um status anterior por uma chamada da API.
+
+#### Receber a pendência por webhook
+
+O webhook de Pedido (`tipo: 3`) envia este payload quando a nota fiscal é invalidada e liberada para reenvio:
+
+```json
+{
+  "id_pedido": "00000000-0000-0000-0000-000000000000",
+  "enum_status": 20,
+  "status": "PendingInvoice"
+}
+```
+
+Valide a assinatura HMAC sobre o corpo bruto antes de processar o evento. Direcione o pedido para correção e reenvio da nota fiscal. A autenticação, a assinatura e a auditoria seguem as regras dos demais webhooks de Pedido.
+
+Não presuma que o reenvio dispara um webhook de retorno ao status anterior. Consulte o pedido para verificar seu status após a importação.
+
+#### Compatibilidade com SDKs
+
+O suporte da API ao código `20` não garante que a versão instalada do SDK exponha uma constante `PendingInvoice`. Verifique o SDK antes de gerar código que use essa constante.
+
+Quando o SDK oferece um fallback de status desconhecido, preserve o valor original. Nos eventos de webhook, use o campo de código bruto (`StatusRaw`, `statusRaw` ou equivalente) e o nome original para identificar `20` e `PendingInvoice`.
+
+Se o filtro tipado da versão instalada não aceita `20`, use a API diretamente ou uma versão do SDK com suporte confirmado. Não invente membros de enum nem métodos do SDK.
 
 ---
 
@@ -157,6 +226,8 @@ curl -s -X POST "$PARCELEMAIS_BASE_URL/v1/order/invoice" \
   -d '{"pedidoId": "ORDER_ID", "arquivoBase64": "'"$(base64 -w0 nota.pdf)"'", "nomeArquivo": "nota.pdf"}' | jq
 ```
 
+Para consultar a pendência com `status=20` e reenviar a nota fiscal com o mesmo `pedidoId`, leia [Status externo de pedido e nota fiscal pendente](#rules-order-status-and-pending-invoice). O código `0` não é aceito como filtro.
+
 ###### Status de pedido (`status.valor`)
 | Valor | Significado |
 | --- | --- |
@@ -180,6 +251,7 @@ curl -s -X POST "$PARCELEMAIS_BASE_URL/v1/order/invoice" \
 | 17 | Congelado |
 | 18 | Aguardando confirmação de pagamento |
 | 19 | Desembolsado |
+| 20 | Nota fiscal pendente (`PendingInvoice`) |
 
 ---
 
@@ -305,6 +377,8 @@ Loja inativa não aceita novos pedidos (os em andamento seguem normalmente) e n�
 
 ##### Webhooks
 
+O webhook de Pedido (`tipo: 3`) pode enviar `enum_status: 20` e `status: "PendingInvoice"`. Consulte [as regras de nota fiscal pendente](#rules-order-status-and-pending-invoice) antes de processar essa notificação.
+
 **Cadastrar webhook**
 ```bash
 curl -s -X POST "$PARCELEMAIS_BASE_URL/v1/webhooks" \
@@ -427,6 +501,10 @@ var orderId = await client.Orders.CreateAsync(new CreateOrderRequest(
 
 var order = await client.Orders.GetAsync(orderId);
 ```
+
+### Pending invoice status
+
+The API can return `20` (`PendingInvoice`, `Nota fiscal pendente`) when an invoice is invalid and released for resubmission. Read [the shared order status rules](#rules-order-status-and-pending-invoice) for `status=20`, resubmission with the same order ID, and the return to the real order status. Verify support in the installed SDK before using a new enum member or a typed filter.
 
 ### Error Handling and Edge Cases
 
@@ -720,6 +798,10 @@ foreach (var attempt in failures.Items)
 - Filter by `StatusCode` (e.g. `500`) to find failed deliveries.
 - `Request`/`Response` are the raw text bodies sent to and received from your endpoint — not parsed JSON.
 
+### Pending invoice event
+
+Order webhooks (`tipo: 3`) can deliver `enum_status: 20` and `status: "PendingInvoice"` when an invalid invoice is released for resubmission. Read [the shared order status rules](#rules-order-status-and-pending-invoice) for the payload, resubmission flow, and handling older SDKs through the original status code and name.
+
 ### Error Handling and Edge Cases
 
 - `ParceleMaisWebhookSignatureException` — signature mismatch, malformed `t=/v1=` header, or timestamp outside the 5-minute replay window. Always return `401` (not `200`) when this is thrown, so Parcele+ can retry/alert.
@@ -854,6 +936,10 @@ UUID orderId = client.orders().create(CreateOrderRequest.builder()
 
 Order order = client.orders().get(orderId);
 ```
+
+### Pending invoice status
+
+The API can return `20` (`PendingInvoice`, `Nota fiscal pendente`) when an invoice is invalid and released for resubmission. Read [the shared order status rules](#rules-order-status-and-pending-invoice) for `status=20`, resubmission with the same order ID, and the return to the real order status. Verify support in the installed SDK before using a new enum member or a typed filter.
 
 ### Error Handling and Edge Cases
 
@@ -1187,6 +1273,10 @@ for (WebhookAudit attempt : failures.getItems()) {
 - Filter by `statusCode` (e.g. `500`) to find failed deliveries.
 - `request`/`response` are the raw text bodies sent to and received from your endpoint — not parsed JSON.
 
+### Pending invoice event
+
+Order webhooks (`tipo: 3`) can deliver `enum_status: 20` and `status: "PendingInvoice"` when an invalid invoice is released for resubmission. Read [the shared order status rules](#rules-order-status-and-pending-invoice) for the payload, resubmission flow, and handling older SDKs through the original status code and name.
+
 ### Error Handling and Edge Cases
 
 - `ParceleMaisWebhookSignatureException` — malformed header, signature mismatch, or replay window exceeded. Always respond `401` in this case, never `200`.
@@ -1327,6 +1417,10 @@ if (order.status === OrderStatus.Approved) {
   console.log(link.url);
 }
 ```
+
+### Pending invoice status
+
+The API can return `20` (`PendingInvoice`, `Nota fiscal pendente`) when an invoice is invalid and released for resubmission. Read [the shared order status rules](#rules-order-status-and-pending-invoice) for `status=20`, resubmission with the same order ID, and the return to the real order status. Verify support in the installed SDK before using a new enum member or a typed filter.
 
 ### Error Handling and Edge Cases
 - `create`/`get`/`list`/`startCdcSale`/`importInvoice` reject with `ParceleMaisValidationError` (400, has `fieldErrors`), `ParceleMaisApiError` (other status codes, has `errorCode`/`correlationId`), `ParceleMaisRateLimitError` (429, has `retryAfterMs`), or `ParceleMaisTimeoutError`/`ParceleMaisAuthenticationError` for transport/auth failures.
@@ -1674,6 +1768,10 @@ for (const attempt of failures.items) {
 - Filter by `statusCode` (e.g. `500`) to find failed deliveries.
 - `request`/`response` are the raw text bodies sent to and received from your endpoint — not parsed JSON.
 
+### Pending invoice event
+
+Order webhooks (`tipo: 3`) can deliver `enum_status: 20` and `status: "PendingInvoice"` when an invalid invoice is released for resubmission. Read [the shared order status rules](#rules-order-status-and-pending-invoice) for the payload, resubmission flow, and handling older SDKs through the original status code and name.
+
 ### Error Handling and Edge Cases
 - `parseWebhookEvent` throws `ParceleMaisWebhookSignatureError` for: malformed signature header, signature mismatch, and stale timestamp (possible replay) — catch it specifically and respond `401`, not `500`.
 - Respond `200` only after successfully processing the event; a non-2xx response causes Parcele+ to retry with backoff — make your handler idempotent using `event.orderId` + `event.status` (an old status re-delivered shouldn't redo work already done).
@@ -1770,6 +1868,10 @@ if order.status == OrderStatus.APPROVED:
     link = client.orders.start_cdc_sale(order_id)
     print(link.url)
 ```
+
+### Pending invoice status
+
+The API can return `20` (`PendingInvoice`, `Nota fiscal pendente`) when an invoice is invalid and released for resubmission. Read [the shared order status rules](#rules-order-status-and-pending-invoice) for `status=20`, resubmission with the same order ID, and the return to the real order status. Verify support in the installed SDK before using a new enum member or a typed filter.
 
 ### Error Handling and Edge Cases
 
@@ -2065,6 +2167,10 @@ for attempt in failures.items:
 - Filter by `status_code` (e.g. `500`) to find failed deliveries.
 - `request`/`response` are the raw text bodies sent to and received from your endpoint — not parsed JSON.
 
+### Pending invoice event
+
+Order webhooks (`tipo: 3`) can deliver `enum_status: 20` and `status: "PendingInvoice"` when an invalid invoice is released for resubmission. Read [the shared order status rules](#rules-order-status-and-pending-invoice) for the payload, resubmission flow, and handling older SDKs through the original status code and name.
+
 ### Error Handling and Edge Cases
 
 - `create` on a `type` that already has a webhook registered returns a conflict error — `list()` first if you're not sure one exists.
@@ -2173,6 +2279,10 @@ if ($order->status === OrderStatus::APPROVED) {
     // redirect the customer to $link->url
 }
 ```
+
+### Pending invoice status
+
+The API can return `20` (`PendingInvoice`, `Nota fiscal pendente`) when an invoice is invalid and released for resubmission. Read [the shared order status rules](#rules-order-status-and-pending-invoice) for `status=20`, resubmission with the same order ID, and the return to the real order status. Verify support in the installed SDK before using a new enum member or a typed filter.
 
 ### Error Handling and Edge Cases
 
@@ -2494,6 +2604,10 @@ foreach ($failures->items as $attempt) { // WebhookAudit
 - Filter by `statusCode` (e.g. `500`) to find failed deliveries.
 - `request`/`response` are the raw text bodies sent to and received from your endpoint — not parsed JSON.
 
+### Pending invoice event
+
+Order webhooks (`tipo: 3`) can deliver `enum_status: 20` and `status: "PendingInvoice"` when an invalid invoice is released for resubmission. Read [the shared order status rules](#rules-order-status-and-pending-invoice) for the payload, resubmission flow, and handling older SDKs through the original status code and name.
+
 ### Error Handling and Edge Cases
 
 - `WebhookEvent::parse()` throws `Twila\ParceleMais\Errors\ParceleMaisWebhookSignatureException` for: empty/invalid JSON body, signature mismatch, malformed signature header, or a timestamp outside the replay window — catch it specifically and respond `401`, don't let it bubble as a generic 500.
@@ -2634,6 +2748,10 @@ orderID, err := client.Orders.Create(ctx, parcelemais.CreateOrderRequest{
 	},
 })
 ```
+
+### Pending invoice status
+
+The API can return `20` (`PendingInvoice`, `Nota fiscal pendente`) when an invoice is invalid and released for resubmission. Read [the shared order status rules](#rules-order-status-and-pending-invoice) for `status=20`, resubmission with the same order ID, and the return to the real order status. Verify support in the installed SDK before using a new enum member or a typed filter.
 
 ### Error Handling and Edge Cases
 
@@ -3017,6 +3135,10 @@ for _, attempt := range failures.Items {
 
 - Filter by `StatusCode` (e.g. `500`) to find failed deliveries.
 - `Request`/`Response` are the raw text bodies sent to and received from your endpoint — not parsed JSON.
+
+### Pending invoice event
+
+Order webhooks (`tipo: 3`) can deliver `enum_status: 20` and `status: "PendingInvoice"` when an invalid invoice is released for resubmission. Read [the shared order status rules](#rules-order-status-and-pending-invoice) for the payload, resubmission flow, and handling older SDKs through the original status code and name.
 
 ### Handling Failures and Edge Cases
 
@@ -4982,6 +5104,9 @@ Ver [rules/go/](../../rules/go) para regras de integração por recurso.
 
 7. **Onde reporto um bug ou peço uma feature num SDK?**
    Abra uma issue ou PR no repositório do SDK correspondente (ver [tools/ecosystem.md](../tools/ecosystem.md)) — todos são open source e aceitam contribuição externa.
+
+8. **O que significa o status `20` (`PendingInvoice`)?**
+   A nota fiscal está inválida e liberada para reenvio. Você pode localizar os pedidos com `status=20` e reenviar o arquivo corrigido com o mesmo `pedidoId`. Após a importação, as consultas voltam a apresentar o status real do pedido. Veja [as regras de nota fiscal pendente](../rules/order-status.md).
 ### Glossário
 
 #### Autenticação
@@ -4996,6 +5121,8 @@ Ver [rules/go/](../../rules/go) para regras de integração por recurso.
 - **Simulação**: cálculo de parcelas/valores sem criar um pedido de verdade.
 - **Desembolso**: liberação do valor aprovado — pedido passa a `Disbursed` (status 19).
 - **Valor bruto vs. líquido** (`tipoValorCalculo`): bruto (1) é o valor antes dos descontos de MDR/antecipação; líquido (2) é o valor efetivamente recebido pelo estabelecimento.
+
+- **Nota fiscal pendente (`PendingInvoice`, código `20`)**: status externo temporário para nota fiscal inválida e liberada para reenvio. Não altera o status real do pedido.
 
 #### Webhooks
 - **Webhook**: callback HTTP enviado pelo Parcele+ quando um evento ocorre (ex.: mudança de status de pedido).

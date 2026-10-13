@@ -20,6 +20,8 @@ When the user wants to **perform actions directly** — create an order, simulat
 For **direct API usage** (agent mode), see:
 - [rules/agent.md](rules/agent.md) — execute API calls directly via curl (create orders, list customers, simulate installments, manage establishments and webhooks, etc.)
 
+For order status handling, invoice resubmission, or Order webhooks, first read [rules/order-status.md](rules/order-status.md). It defines `20` (`PendingInvoice`), filtering, and SDK compatibility.
+
 For **code integration**, read the rule file for the module and language you're using:
 
 - **Orders** (create, get, list, start CDC sale, import invoice): [dotnet](rules/dotnet/orders.md) / [java](rules/java/orders.md) / [node](rules/node/orders.md) / [python](rules/python/orders.md) / [php](rules/php/orders.md) / [go](rules/go/orders.md)
@@ -41,6 +43,9 @@ Use development tools for enhanced integration experience:
 **Rules (per language)** — [rules/dotnet/](rules/dotnet), [rules/java/](rules/java), [rules/node/](rules/node), [rules/python/](rules/python), [rules/php/](rules/php), [rules/go/](rules/go) — each with `orders.md`, `simulations.md`, `customers.md`, `establishments.md`, `webhooks.md`, `security.md`.
 
 **Examples (per language)** — [examples/dotnet/](examples/dotnet), [examples/java/](examples/java), [examples/node/](examples/node), [examples/python/](examples/python), [examples/php/](examples/php), [examples/go/](examples/go) — each with `orders`, `simulations`, `customers`, `establishments`, `webhooks` source files.
+
+**Shared business rules**
+- [rules/order-status.md](rules/order-status.md) — external order status, pending invoices, resubmission, and SDK compatibility.
 
 **Agent Mode**
 - [rules/agent.md](rules/agent.md) — direct API usage via curl.

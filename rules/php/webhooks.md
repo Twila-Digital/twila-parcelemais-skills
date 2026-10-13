@@ -100,6 +100,10 @@ foreach ($failures->items as $attempt) { // WebhookAudit
 - Filter by `statusCode` (e.g. `500`) to find failed deliveries.
 - `request`/`response` are the raw text bodies sent to and received from your endpoint — not parsed JSON.
 
+## Pending invoice event
+
+Order webhooks (`tipo: 3`) can deliver `enum_status: 20` and `status: "PendingInvoice"` when an invalid invoice is released for resubmission. Read [the shared order status rules](../order-status.md) for the payload, resubmission flow, and handling older SDKs through the original status code and name.
+
 ## Error Handling and Edge Cases
 
 - `WebhookEvent::parse()` throws `Twila\ParceleMais\Errors\ParceleMaisWebhookSignatureException` for: empty/invalid JSON body, signature mismatch, malformed signature header, or a timestamp outside the replay window — catch it specifically and respond `401`, don't let it bubble as a generic 500.

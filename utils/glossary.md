@@ -13,6 +13,8 @@
 - **Desembolso**: liberação do valor aprovado — pedido passa a `Disbursed` (status 19).
 - **Valor bruto vs. líquido** (`tipoValorCalculo`): bruto (1) é o valor antes dos descontos de MDR/antecipação; líquido (2) é o valor efetivamente recebido pelo estabelecimento.
 
+- **Nota fiscal pendente (`PendingInvoice`, código `20`)**: status externo temporário para nota fiscal inválida e liberada para reenvio. Não altera o status real do pedido.
+
 ## Webhooks
 - **Webhook**: callback HTTP enviado pelo Parcele+ quando um evento ocorre (ex.: mudança de status de pedido).
 - **Chave de assinatura**: segredo retornado ao cadastrar um webhook, usado pra validar a assinatura HMAC-SHA256 do payload recebido.

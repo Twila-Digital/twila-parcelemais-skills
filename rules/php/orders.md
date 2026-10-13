@@ -71,6 +71,10 @@ if ($order->status === OrderStatus::APPROVED) {
 }
 ```
 
+## Pending invoice status
+
+The API can return `20` (`PendingInvoice`, `Nota fiscal pendente`) when an invoice is invalid and released for resubmission. Read [the shared order status rules](../order-status.md) for `status=20`, resubmission with the same order ID, and the return to the real order status. Verify support in the installed SDK before using a new enum member or a typed filter.
+
 ## Error Handling and Edge Cases
 
 - `create()`/`get()`/`list()`/`startCdcSale()`/`importInvoice()` throw `Twila\ParceleMais\Errors\ParceleMaisValidationException` (HTTP 400, has `getFieldErrors(): ?array` per-field messages) or the base `Twila\ParceleMais\Errors\ParceleMaisApiException` (any other non-2xx — `getStatusCode()`, `getErrorCode()`, `getCorrelationId()`) for API errors, `ParceleMaisRateLimitException` (429, `getRetryAfterMs()`) for rate limiting, and `ParceleMaisAuthenticationException`/`ParceleMaisTimeoutException` for auth/network failures.
